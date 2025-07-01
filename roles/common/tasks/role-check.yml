@@ -1,0 +1,29 @@
+---
+
+- name: Check that role is either 'omni' or '{{ target_role }}'
+  fail:
+    msg: 
+      - "Host {{ inventory_hostname }} has its role set to '{{ role }}'"
+      - "Allowed roles for this playbook are 'omni' and '{{ target_role }}'"
+  when: 
+    - role != 'omni'
+    - role != target_role
+    - ( strict_check | default(False) | bool ) == False
+
+- name: Check that role is  '{{ target_role }}'
+  fail:
+    msg: 
+      - "Host {{ inventory_hostname }} has its role set to '{{ role }}'"
+      - "Allowed roles for this playbook are '{{ target_role }}'"
+  when: 
+    - role != target_role
+    - ( strict_check | default(False) | bool ) == True
+      
+- name: If role is 'omni', set to '{{ target_role }}'
+  include_role:
+    name: common
+    tasks_from: set-role.yml
+  vars:
+    change_to: '{{ target_role }}'
+
+...

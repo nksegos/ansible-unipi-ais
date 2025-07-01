@@ -1,0 +1,13 @@
+---
+
+- name: Run result processor on {{ producer_log.split('/')[-1] }} and {{ consumer_log.split('/')[-1] }} with platform -> {{ backend_platform }} and peak of year -> {{ peak_year }}
+  command:
+    cmd: |
+      {{ exec_path }} {{ role_path }}/files/utils/process-benchmark-output.py -p {{ producer_log }} -c {{ consumer_log }} -o {{ role_path }}/files/benchmark_results/viz/
+  register: processor_out
+
+- name: Print results
+  debug:
+    msg: "{{ processor_out.stdout_lines }}"
+
+...

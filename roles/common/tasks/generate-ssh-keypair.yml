@@ -1,0 +1,14 @@
+---
+
+- name: Generate SSH key pair for {{ ssh_keypair_user }}
+  openssh_keypair:
+    path: "/home/{{ ssh_keypair_user }}/.ssh/ansible_key"
+    type: 'ed25519'
+    passphrase: ""  # Set a passphrase if needed
+    owner: "{{ ssh_keypair_user }}"
+    group: "{{ ssh_keypair_user }}"
+    mode: '0600'
+    state: 'present'
+  register: ssh_key
+
+...

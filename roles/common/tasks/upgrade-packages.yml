@@ -1,0 +1,13 @@
+---
+
+- name: Update any packages requiring updates
+  apt:
+    update_cache: true
+    cache_valid_time: 86400
+    upgrade: true
+  register: apt_upgrade                            # This and the next few lines are due to the module not handling the implicit dpkg frontend lock placed by other apt operations,
+  until: apt_upgrade is success                    # causing instant failure instead of using the module's lock_timeout value for waiting. See https://github.com/ansible/ansible/issues/78658
+  retries: 36
+  delay: 5
+
+...

@@ -1,0 +1,23 @@
+---
+
+- name: Check if link target {{ link_target }} exists
+  stat:
+    path: "{{ link_target }}"
+  register: link_target_path
+
+- name: Fail if the link target {{ link_target }} doesn't exist
+  fail:
+    msg: "The link target path {{ link_target }} does not exist."
+  when: not link_target_path.stat.exists
+
+- name: Create link between {{ link_target }} and {{ link_name }}
+  file:
+    src: "{{ link_target }}"
+    dest: "{{ link_name }}"
+    owner: root
+    group: kafka
+    state: link
+    follow: no
+    force: "{{ force_link | default(false) }}"
+
+... 

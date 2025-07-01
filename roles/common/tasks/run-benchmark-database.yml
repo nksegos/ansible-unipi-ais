@@ -1,0 +1,86 @@
+---
+
+- name: Load dependent role vars
+  include_vars:
+    dir: "{{ role_path }}/../{{ dependent_role }}/vars/"
+  loop:
+    - 'database'
+    - 'consumer'
+    - 'producer'
+  loop_control:
+    loop_var: 'dependent_role'
+
+- name: Truncate {{ ais_static_table }} and {{ ais_kinematic_table }} on {{ database_host }}
+  command:
+    cmd: |
+      /usr/bin/psql -d {{ dbname }}_bench -c 'TRUNCATE TABLE {{ ais_static_table }}; TRUNCATE TABLE {{ ais_kinematic_table }};'
+  become_user: 'postgres'
+  delegate_to: "{{ database_host }}"
+
+- name: Ensure consumer log is absent
+  file:
+    path: "/tmp/consumer_{{ dataset_id }}_Database_bench.csv"
+    state: absent
+  delegate_to: "{{ consumer_host }}"
+
+- name: Ensure producer log is absent
+  file:
+    path: "/tmp/producer_{{ dataset_id }}_Database_bench.csv"
+    state: absent
+  delegate_to: "{{ producer_host }}"
+
+- name: Start DB consumer client
+  command:
+    cmd: |
+      {{ consumer_base }}/venv/bin/python3 {{ consumer_base }}/bin/db-consumer-bench.py -o /tmp/consumer_{{ dataset_id }}_Database_bench.csv
+  async: 7200
+  poll: 0
+  register: consumer_task
+  delegate_to: "{{ consumer_host }}"
+
+- name: Wait for 30 sec
+  pause:
+    seconds: 30
+
+- name: Start DB producer client
+  command:
+    cmd: |
+      {{ producer_base }}/venv/bin/python3 {{ producer_base }}/bin/database-producer-realtime.py -i {{ producer_base }}/data/{{ dataset_id }}_peak_enriched.csv --latency-benchmark-mode -o /tmp/producer_{{ dataset_id}}_Database_bench.csv
+  async: 7200
+  poll: 0
+  register: producer_task
+  delegate_to: "{{ producer_host }}"
+
+- name: Wait for DB consumer client to exit
+  async_status:
+    jid: "{{ consumer_task.ansible_job_id }}"
+  register: async_poll_consumer
+  until: async_poll_consumer.finished
+  retries: 120
+  delay: 60
+  delegate_to: "{{ consumer_host }}"
+
+- name: Wait for DB producer client to exit
+  async_status:
+    jid: "{{ producer_task.ansible_job_id }}"
+  register: async_poll_producer
+  until: async_poll_producer.finished
+  retries: 120
+  delay: 60
+  delegate_to: "{{ producer_host }}"
+
+- name: Retrieve consumer log
+  fetch:
+    src: "/tmp/consumer_{{ dataset_id }}_Database_bench.csv"
+    dest: "{{ role_path }}/files/benchmark_results/database/"
+    flat: true
+  delegate_to: "{{ consumer_host }}"
+
+- name: Retrieve producer log
+  fetch:
+    src: "/tmp/producer_{{ dataset_id }}_Database_bench.csv"
+    dest: "{{ role_path }}/files/benchmark_results/database/"
+    flat: true
+  delegate_to: "{{ producer_host }}"
+
+...

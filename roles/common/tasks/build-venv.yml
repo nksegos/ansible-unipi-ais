@@ -1,0 +1,18 @@
+---
+
+- name: Ensure python3-venv is installed
+  apt:
+    name: 
+      - "python3-venv"
+      - "python3-pip"
+    state: present
+  when: inventory_hostname != 'localhost'
+
+- name: Create venv and install packages
+  pip:
+    name: "{{ venv_packages }}"
+    virtualenv: "{{ venv_path }}"
+    virtualenv_command: "{{ venv_command | default('python3 -m venv') }}"
+  become_user: "{{ venv_owner }}"
+
+...

@@ -1,0 +1,33 @@
+---
+
+- name: If current role is not 'omni', require override
+  fail:
+    msg: 
+      - "Host {{ inventory_hostname }} has its role set to '{{ role }}'."
+      - "A role cannot be overriden without setting allow_role_change to 'True', unless the role is 'omni'. Current value: '{{ allow_role_change | default(False) | bool }}'."
+  when: 
+    - role != change_to
+    - role != 'omni'
+    - not ( allow_role_change | default(False) | bool )
+
+- name: Save current host role
+  set_fact:
+    host_role: "{{ role }}"
+  when: role != change_to
+
+- name: Update role
+  when: ( host_role | default(role) )!= change_to  # The evaluation takes place for each task in the block, so certain parts may be skipped if the control var is changed 
+  block:
+  
+    - name: Set role to '{{ change_to }}'
+      set_fact:
+        role: '{{ change_to }}'
+
+    - name: Persist inventory
+      include_role:
+        name: common
+        tasks_from: regenerate-inventory.yml
+        apply:
+          delegate_to: localhost
+
+...

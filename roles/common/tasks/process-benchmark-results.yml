@@ -1,0 +1,36 @@
+---
+
+- name: Load dataset release vars
+  include_vars:
+    file: "{{ role_path }}/../producer/vars/dataset-releases.yml"
+
+- name: Set executable python path for dataset scripts
+  set_fact:
+    python_bin_path: "{{ role_path }}/files/utils/venv/bin/python3"
+
+- name: Setup venv for dataset scripts
+  include_role:
+    name: common
+    tasks_from: build-venv.yml
+  vars:
+    venv_path: "{{ python_bin_path | regex_replace('/bin/python3','') }}"
+    venv_owner: "{{ lookup('env', 'USER') }}"
+    venv_packages:
+      - "pandas"
+      - "matplotlib"
+      - "csvsort"
+
+- name: Process benchmark results per platform per year
+  include_tasks:
+    file: process-pair.yml
+  vars:
+    producer_log: "{{ role_path }}/files/benchmark_results/{{ platform_year.0 }}/producer_{{ platform_year.1 }}_{{ platform_year.0 }}_bench.csv"
+    consumer_log: "{{ role_path }}/files/benchmark_results/{{ platform_year.0 }}/consumer_{{ platform_year.1 }}_{{ platform_year.0 }}_bench.csv"
+    backend_platform: "{{ platform_year.0 }}"
+    peak_year: "{{ platform_year.1 }}"
+    exec_path: "{{ python_bin_path }}"
+  loop: "{{ ['Database','Kafka'] | product(dataset_releases['dynamic'] | list ) | list | map('list') | list }}"
+  loop_control:
+    loop_var: 'platform_year'
+    label: "Processing benchmark results for year {{ platform_year.1 }} using {{ platform_year.0 }}"
+...

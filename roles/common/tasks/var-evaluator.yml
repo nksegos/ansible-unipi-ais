@@ -1,0 +1,12 @@
+---
+
+- set_fact:
+    eval_var_value: "{{ lookup('vars', eval_var, default='') }}"
+
+- name: Ensure that {{ eval_var }} is defined and non-empty
+  assert:
+    that: ( ( eval_var_value is defined ) and ( eval_var_value | default('') | length ) != 0 )
+    success_msg: "{{ eval_var }} is defined and set to \"{{ eval_var_value | default('') }}\"."
+    fail_msg: "{{ eval_var }} is not defined or is empty. Current value: \"{{ eval_var_value | default('') }}\"."
+
+...

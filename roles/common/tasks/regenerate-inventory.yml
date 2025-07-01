@@ -1,0 +1,9 @@
+---
+
+- name: Regenerate inventory
+  template:
+    src: templates/inventory.yml.j2
+    dest: "{{ (role_path.split('/') | map('trim'))[:-2] | join('/') }}/inventories/lab.yml"
+  become: false
+
+...

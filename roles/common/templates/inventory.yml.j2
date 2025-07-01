@@ -1,0 +1,56 @@
+---
+
+lab:
+  hosts:
+{% for host in ( groups['all'] | sort ) %}
+    {{ host }}:
+{% if hostvars[host].role is defined %}
+      role: '{{ hostvars[host].role }}'
+{% else %}
+      role: 'omni'
+{% endif %}
+{% endfor %}
+  vars:
+    ansible_user: 'ansible'
+
+omni:
+  hosts:
+{% for host in ( groups['all'] | sort ) %}
+{% if ( hostvars[host].role is not defined ) or ( hostvars[host].role == 'omni' ) %}
+    {{ host }}:
+{% endif %}
+{% endfor %}
+
+broker:
+  hosts:
+{% for host in ( groups['all'] | sort ) %}
+{% if ( hostvars[host].role is defined ) and ( hostvars[host].role == 'broker' ) %}
+    {{ host }}:
+{% endif %}
+{% endfor %}
+
+producer:
+  hosts:
+{% for host in ( groups['all'] | sort ) %}
+{% if ( hostvars[host].role is defined ) and ( hostvars[host].role == 'producer' ) %}
+    {{ host }}:
+{% endif %}
+{% endfor %}
+
+consumer:
+  hosts:
+{% for host in ( groups['all'] | sort ) %}
+{% if ( hostvars[host].role is defined ) and ( hostvars[host].role == 'consumer' ) %}
+    {{ host }}:
+{% endif %}
+{% endfor %}
+
+database:
+  hosts:
+{% for host in ( groups['all'] | sort ) %}
+{% if ( hostvars[host].role is defined ) and ( hostvars[host].role == 'database' ) %}
+    {{ host }}:
+{% endif %}
+{% endfor %}
+
+...
