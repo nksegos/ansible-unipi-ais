@@ -1,0 +1,76 @@
+---
+
+- name: Load UniPi AIS dataset release info
+  include_vars:
+    file: dataset-releases.yml
+
+- name: Download the UniPi AIS static dataset archive if not already present
+  get_url:
+    url: "{{ dataset_releases['static'].url }}"
+    dest: "{{ role_path }}/files/dataset_archives/{{ dataset_releases['static'].name }}"
+    checksum: "{{ dataset_releases['static'].checksum }}"
+    timeout: 1800
+    force: false
+    tmp_dest: "{{ role_path }}/files/dataset_archives"
+  run_once: true
+  become: false
+
+- name: Download the UniPi AIS dynamic dataset archives if not already present
+  get_url:
+    url: "{{ dataset_releases['dynamic'][release_year].url }}"
+    dest: "{{ role_path }}/files/dataset_archives/{{ dataset_releases['dynamic'][release_year].name }}"
+    checksum: "{{ dataset_releases['dynamic'][release_year].checksum }}"
+    timeout: 1800
+    force: false
+    tmp_dest: "{{ role_path }}/files/dataset_archives"
+  run_once: true
+  become: false
+  loop: "{{ dataset_releases['dynamic'] | list }}"
+  loop_control:
+    loop_var: 'release_year'
+    label: "{{ dataset_releases['dynamic'][release_year].name }}"
+
+- name: Create unarchival directory for static dataset
+  file:
+    path: "{{ role_path }}/files/unarchived_datasets/{{ dataset_releases['static'].name | regex_replace('.zip', '') }}"
+    state: directory
+
+- name: Unarchive static dataset
+  unarchive:
+    src: "{{ role_path }}/files/dataset_archives/{{ dataset_releases['static'].name }}"
+    dest: "{{ role_path }}/files/unarchived_datasets/{{ dataset_releases['static'].name | regex_replace('.zip', '') }}"
+
+- name: Validate existence of unarchived ais_codes_descriptions.csv
+  stat:
+    path: "{{ role_path }}/files/unarchived_datasets/{{ dataset_releases['static'].name | regex_replace('.zip', '') }}/ais_static/ais_codes_descriptions.csv"
+    get_checksum: false
+    get_attributes: false
+    get_mime: false
+  register: codes_file
+
+- name: Copy ais_codes_descriptions.csv to the database role files
+  copy:
+    remote_src: true
+    src: "{{ role_path }}/files/unarchived_datasets/{{ dataset_releases['static'].name | regex_replace('.zip', '') }}/ais_static/ais_codes_descriptions.csv"
+    dest: "{{ role_path }}/../database/files/datasets/ais_codes_descriptions.csv"
+  when: codes_file.stat.exists
+
+- name: Create unarchival directories for dynamic datasets
+  file:
+    path: "{{ role_path }}/files/unarchived_datasets/{{ dataset_releases['dynamic'][release_year].name | regex_replace('.zip', '') }}"
+    state: directory
+  loop: "{{ dataset_releases['dynamic'] | list }}"
+  loop_control:
+    loop_var: 'release_year'
+    label: "{{ role_path }}/files/unarchived_datasets/{{ dataset_releases['dynamic'][release_year].name | regex_replace('.zip', '') }}"
+
+- name: Unarchive dynamic datasets
+  unarchive:
+    src: "{{ role_path }}/files/dataset_archives/{{ dataset_releases['dynamic'][release_year].name }}"
+    dest: "{{ role_path }}/files/unarchived_datasets/{{ dataset_releases['dynamic'][release_year].name | regex_replace('.zip', '') }}"
+  loop: "{{ dataset_releases['dynamic'] | list }}"
+  loop_control:
+    loop_var: 'release_year'
+    label: "{{ dataset_releases['dynamic'][release_year].name }}"
+
+...

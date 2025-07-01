@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+
+import csv
+import json
+import time
+import argparse
+import sys
+from confluent_kafka import Producer
+
+
+parser = argparse.ArgumentParser("kafka-producer-realtime.py")
+parser.add_argument("-i", "--input-file", required=True, help="Path to the input CSV file to be used for message production.")
+parser.add_argument("--has-header", action='store_true', help="Use this option to skip the first row of the input file")
+parser.add_argument("--latency-benchmark-mode", action='store_true', help="With this mode enabled, each kinematic gets assigned an ID, which is written to a logfile along with the publishing timestamp.")
+parser.add_argument("-o", "--latency-log-output-file", help="The path for the file containing the message_id timestamp pairs.")
+
+args = parser.parse_args()
+
+if args.latency_benchmark_mode and not args.latency_log_output_file:
+    parser.error("When running the script with --latency-benchmark-mode, you also need to specify -o/--latency-log-output-file.")
+
+kafka_broker = "{{ kafka_broker_host }}:{{ kafka_broker_port }}"
+static_data_topic = "{{ kafka_topics | select('match', '.*static.*') | first }}"
+kinematic_data_topic = "{{ kafka_topics | select('match', '.*kinematic.*') | first }}"
+
+benchmark_mode = args.latency_benchmark_mode
+
+if benchmark_mode:
+    static_data_topic = static_data_topic + '_bench'
+    kinematic_data_topic = kinematic_data_topic + '_bench'
+
+
+message_schema_template= {
+    static_data_topic: {
+        "type": "struct",
+        "fields": [
+            { "type": "string",  "optional": False, "field": "mmsi"    },
+            { "type": "string", "optional": True, "field": "country"  },
+            { "type": "int32", "optional": True, "field": "shiptype" },
+            { "type": "string", "optional": True, "field": "shipname" }
+        ]
+    },
+    kinematic_data_topic: {
+        "type": "struct",
+        "fields": [
+            { "type": "int64",  "optional": False, "field": "timestamp"     },
+            { "type": "string", "optional": False, "field": "mmsi" },
+            { "type": "double", "optional": False, "field": "longitude"   },
+            { "type": "double", "optional": False, "field": "latitude" },
+            { "type": "double", "optional": True, "field": "heading"   },
+            { "type": "double", "optional": True, "field": "speed"   },
+            { "type": "double", "optional": True, "field": "course"   },
+            *([{ "type": "int64", "optional": False, "field": "kinematic_msg_id"}] if benchmark_mode else [])
+        ]
+    }
+}
+
+
+
+
+conf = { 'bootstrap.servers': kafka_broker }
+producer = Producer(conf)
+
+def delivery_report(err, msg):
+    if err is not None:
+        print(f"Delivery failed for record: {err}")
+    else:
+        print(f"Record sent to {msg.topic()} [partition {msg.partition()}]")
+
+
+with open(args.input_file, newline='') as csvfile:
+    
+    if benchmark_mode:
+        current_kinematic_id = 0
+
+    prev_timestamp = None
+    
+    reader = csv.reader(csvfile)
+    if args.has_header:
+        next(reader)
+    for row in reader:
+        original_timestamp = int(row[0])
+
+        if prev_timestamp is not None:
+            delay = original_timestamp - prev_timestamp
+            if delay > 0:
+                time.sleep(delay // 1000)
+
+        field_count = len(row)
+        if field_count == 4:
+            schema_template = message_schema_template[static_data_topic]
+            payload_template = {} 
+            payload_template['mmsi'] = row[1]
+            payload_template['country']   = row[2] or ''
+            payload_template['shiptype']  = int(row[3] or 0)
+            payload_template['shipname'] = ''
+        else:
+            schema_template = message_schema_template[kinematic_data_topic]
+            payload_template = {} 
+            payload_template['timestamp'] = int(time.time_ns() // 1_000_000) # floor division to avoid going to the future
+            payload_template['mmsi'] = row[1]
+            payload_template['longitude'] = float(row[2])
+            payload_template['latitude']  = float(row[3])
+            payload_template['heading']   = float(row[4] or 0)
+            payload_template['speed']     = float(row[5] or 0)
+            payload_template['course']    = float(row[6] or 0)
+            if benchmark_mode:
+                payload_template['kinematic_msg_id'] = current_kinematic_id
+
+        json_payload = json.dumps({"schema": schema_template, "payload" : payload_template})
+
+        if field_count == 4:
+            topic = static_data_topic
+        else:
+            topic = kinematic_data_topic
+
+        producer.produce(topic=topic, value=json_payload, callback=delivery_report)
+        producer.poll(0)
+        if benchmark_mode and field_count > 4:
+            with open(args.latency_log_output_file, 'a') as latency_log:
+                latency_log.write(f"{current_kinematic_id},{payload_template['timestamp']}\n")
+            current_kinematic_id += 1
+        prev_timestamp = original_timestamp
+            
+
+producer.flush()
+sys.exit(0)
+

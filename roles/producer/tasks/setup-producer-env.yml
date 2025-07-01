@@ -1,0 +1,118 @@
+---
+
+- name: Create kproducer group
+  user:
+    name: kproducer
+    comment: Apache Kafka Producer Client
+    create_home: false
+    shell: /bin/false
+    state: present
+
+- name: Create  dirs
+  file:
+    path: "{{ dir }}"
+    state: directory
+    owner: 'kproducer'
+    group: 'kproducer'
+    mode: 0750
+  loop:
+    - "{{ producer_base }}"
+    - "{{ producer_base }}/bin"
+    - "{{ producer_base }}/data"
+  loop_control:
+    loop_var: 'dir'
+
+- name: Setup PG repo
+  include_role:
+    name: database
+    tasks_from: setup-postgres-repo.yml
+
+- name: Install PG client
+  include_role:
+    name: database
+    tasks_from: install-postgres-client.yml
+
+- name: Setup Producer venv
+  include_role:
+    name: common
+    tasks_from: build-venv.yml
+  vars:
+    venv_path: "{{ producer_base }}/venv/"
+    venv_owner: 'kproducer'
+    venv_packages:
+      - "confluent_kafka"
+      - "psycopg2"
+
+- name: Load Kafka vars
+  include_vars:
+    dir: "{{ role_path }}/../kafka/vars/"
+
+- name: Check if kafka_broker_host has been supplied and if not, try to pull one from the inventory
+  block:
+
+    - name: Evaluate contents of kafka_broker_host
+      include_role:
+        name: common
+        tasks_from: var-evaluator.yml
+      vars:
+        eval_var: 'kafka_broker_host'
+
+  rescue:
+
+    - name: Attempt to pull kafka_broker_host from the inventory
+      set_fact:
+        kafka_broker_host: "{{ groups['broker'] | default(['']) | first }}"
+
+    - name: Re-evaluate kafka_broker_host
+      include_role:
+        name: common
+        tasks_from: var-evaluator.yml
+      vars:
+        eval_var: 'kafka_broker_host'
+
+
+- name: Load database vars
+  include_vars:
+    dir: "{{ role_path }}/../database/vars/"
+
+- name: Check if database_host has been supplied and if not, try to pull one from the inventory
+  block:
+
+    - name: Evaluate contents of database_host
+      include_role:
+        name: common
+        tasks_from: var-evaluator.yml
+      vars:
+        eval_var: 'database_host'
+
+  rescue:
+
+    - name: Attempt to pull database_host from the inventory
+      set_fact:
+        database_host: "{{ groups['database'] | default(['']) | first }}"
+
+    - name: Re-evaluate database_host
+      include_role:
+        name: common
+        tasks_from: var-evaluator.yml
+      vars:
+        eval_var: 'database_host'
+
+
+- name: Deploy producer clients
+  template:
+    src: "templates/clients/{{ script }}.j2"
+    dest: "{{ producer_base }}/bin/{{ script }}"
+    owner: 'kproducer'
+    group: 'kproducer'
+    mode: 0750
+  loop:
+    - 'kafka-producer-realtime.py'
+    - 'database-producer-realtime.py'
+  loop_control:
+    loop_var: 'script'
+
+- name: Load datasets
+  include_tasks:
+    file: copy-datasets.yml
+...

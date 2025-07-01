@@ -1,0 +1,11 @@
+---
+
+- name: Send SIGTERM to any {{ producer_platform }} producer process
+  shell: 
+    cmd: |
+      kill $( ps aux | grep {{ producer_base }}/bin/{{ producer_platform }}-producer-realtime.py | grep -v grep | awk -F' ' '{ print $2 }')  
+  register: kill_cmd
+  changed_when: kill_cmd.rc == 0
+  failed_when: false
+
+...

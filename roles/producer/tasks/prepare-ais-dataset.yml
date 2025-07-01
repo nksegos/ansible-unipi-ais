@@ -1,0 +1,54 @@
+---
+
+- name: Load UniPi AIS dataset release info
+  include_vars:
+    file: dataset-releases.yml
+
+- name: Set executable python path for dataset scripts
+  set_fact:
+    python_bin_path: "{{ role_path }}/../common/files/utils/venv/bin/python3"
+
+- name: Setup venv for dataset scripts
+  include_role:
+    name: common
+    tasks_from: build-venv.yml
+  vars:
+    venv_path: "{{ python_bin_path | regex_replace('/bin/python3','') }}"
+    venv_owner: "{{ lookup('env', 'USER') }}"
+    venv_packages:
+      - "pandas"
+      - "matplotlib"
+      - "csvsort"
+
+- name: Identify peaks in the datasets
+  command:
+    cmd: "{{ python_bin_path }} {{ role_path }}/files/utils/find-and-viz-peaks.py -i {{ role_path }}/files/unarchived_datasets/{{ dataset_releases['dynamic'][release_year].name | regex_replace('.zip', '') }} --dir-mode -o {{ role_path }}/files/viz/ --headless"
+  register: yearly_peaks
+  async: 3600
+  poll: 60
+  loop: "{{ dataset_releases['dynamic'] | list }}"
+  loop_control:
+    loop_var: 'release_year'
+    label: "{{ role_path }}/files/unarchived_datasets/{{ dataset_releases['dynamic'][release_year].name | regex_replace('.zip', '') }}"
+
+- name: Extract peaks from the datasets
+  command:
+    cmd: "{{ python_bin_path }} {{ role_path }}/files/utils/extract-rows.py -i {{ peak.stdout.split('|')[0] }} -t '{{ peak.stdout.split('|')[1] }}' -o {{ role_path }}/files/extracted_datasets/{{ peak.stdout.split('/')[-2].split('_')[-1] }}_peak.csv"
+  async: 3600
+  poll: 30
+  loop: "{{ yearly_peaks.results }}"
+  loop_control:
+    loop_var: 'peak'
+    label: "{{ peak.stdout.split('|')[0] }}"
+
+- name: Enrich extracted datasets
+  command:
+    cmd: "{{ python_bin_path }} {{ role_path }}/files/utils/enrich-dataset.py -k {{ role_path }}/files/extracted_datasets/{{ release_year }}_peak.csv -s {{ role_path }}/files/unarchived_datasets/{{ dataset_releases['static'].name | regex_replace('.zip', '') }}/ais_static/unipi_ais_static.csv -o {{ role_path }}/files/enriched_datasets/{{ release_year }}_peak_enriched.csv"
+  async: 3600
+  poll: 30
+  loop: "{{ dataset_releases['dynamic'] | list }}"
+  loop_control:
+    loop_var: 'release_year'
+    label: "{{ release_year }}_peak.csv"
+
+...

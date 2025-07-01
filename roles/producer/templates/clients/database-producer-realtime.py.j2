@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+
+import csv
+import json
+import time
+import argparse
+import sys
+import psycopg2
+
+
+parser = argparse.ArgumentParser("database-producer-realtime.py")
+parser.add_argument("-i", "--input-file", required=True, help="Path to the input CSV file to be used for message production.")
+parser.add_argument("--has-header", action='store_true', help="Use this option to skip the first row of the input file")
+parser.add_argument("--latency-benchmark-mode", action='store_true', help="With this mode enabled, each kinematic gets assigned an ID, which is written to a logfile along with the publishing timestamp.")
+parser.add_argument("-o", "--latency-log-output-file", help="The path for the file containing the message_id timestamp pairs.")
+
+args = parser.parse_args()
+
+if args.latency_benchmark_mode and not args.latency_log_output_file:
+    parser.error("When running the script with --latency-benchmark-mode, you also need to specify -o/--latency-log-output-file.")
+
+static_data_table = "{{ kafka_topics | select('match', '.*static.*') | first }}"
+kinematic_data_table = "{{ kafka_topics | select('match', '.*kinematic.*') | first }}"
+db_name = "{{ dbname }}"
+
+db_host = "{{ database_host }}"
+db_port = {{ database_port }}
+db_user = "{{ database_roles['producer'].name }}"
+db_password = "{{ database_roles['producer'].password }}"
+
+
+benchmark_mode = args.latency_benchmark_mode
+
+if benchmark_mode:
+    db_name = db_name + '_bench'
+    kinematic_sql = f"INSERT INTO {kinematic_data_table}(timestamp, mmsi, longitude, latitude, heading, speed, course, kinematic_msg_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s);"
+else:
+    kinematic_sql = f"INSERT INTO {kinematic_data_table}(timestamp, mmsi, longitude, latitude, heading, speed, course) VALUES (%s, %s, %s, %s, %s, %s, %s);"
+
+static_sql = f"INSERT INTO {static_data_table} (mmsi, country, shiptype, shipname) VALUES (%s, %s, %s, %s) ON CONFLICT (mmsi) DO UPDATE SET (country, shiptype, shipname) = (EXCLUDED.country, EXCLUDED.shiptype, EXCLUDED.shipname);"
+
+conn = psycopg2.connect(host=db_host,port=db_port,dbname=db_name,user=db_user,password=db_password, connect_timeout=3)
+cur = conn.cursor()
+
+with open(args.input_file, newline='') as csvfile:
+    
+    if benchmark_mode:
+        current_kinematic_id = 0
+
+    prev_timestamp = None
+    
+    reader = csv.reader(csvfile)
+    if args.has_header:
+        next(reader)
+    for row in reader:
+        original_timestamp = int(row[0])
+
+        if prev_timestamp is not None:
+            delay = original_timestamp - prev_timestamp
+            if delay > 0:
+                time.sleep(delay // 1000)
+
+        field_count = len(row)
+        if field_count == 4:
+            mmsi = row[1]
+            country   = row[2] or ''
+            shiptype  = int(row[3]) if row[3] != '' else None
+            shipname = ''
+            cur.execute(static_sql, (mmsi, country, shiptype, shipname))
+        else:
+            timestamp = int(time.time_ns() // 1_000_000) # floor division to avoid going to the future
+            mmsi = row[1]
+            longitude = float(row[2])
+            latitude  = float(row[3])
+            heading   = float(row[4] or 0)
+            speed     = float(row[5] or 0)
+            course    = float(row[6] or 0)
+            if benchmark_mode:
+                kinematic_msg_id = current_kinematic_id
+                cur.execute(kinematic_sql, (timestamp, mmsi, longitude, latitude, heading, speed, course, kinematic_msg_id))
+                with open(args.latency_log_output_file, 'a') as latency_log:
+                    latency_log.write(f"{current_kinematic_id},{timestamp}\n")
+                current_kinematic_id += 1
+            else:
+                cur.execute(kinematic_sql, (timestamp, mmsi, longitude, latitude, heading, speed, course))
+
+        conn.commit()            
+        prev_timestamp = original_timestamp
+            
+
+conn.close()
+sys.exit(0)
+

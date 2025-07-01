@@ -1,0 +1,23 @@
+---
+
+dataset_releases:
+  static:
+    name: 'ais_static.zip'
+    url: 'https://zenodo.org/records/6323416/files/ais_static.zip?download=1'
+    checksum: 'md5:95ae27a368de90f7fe268933bd6abf60'
+  dynamic:
+    2017:
+      name: 'unipi_ais_dynamic_2017.zip'
+      url: 'https://zenodo.org/records/6323416/files/unipi_ais_dynamic_2017.zip?download=1'
+      checksum: 'md5:252dd77be04fd95a3c5d64b4a4e627d0'
+    2018:
+      name: 'unipi_ais_dynamic_2018.zip'
+      url: 'https://zenodo.org/records/6323416/files/unipi_ais_dynamic_2018.zip?download=1'
+      checksum: 'md5:0e2cc40f8b9dfca34448f30330d9917f'
+    2019:
+      name: 'unipi_ais_dynamic_2019.zip'
+      url: 'https://zenodo.org/records/6323416/files/unipi_ais_dynamic_2019.zip?download=1'
+      checksum: 'md5:6324faa339497eccdd225291b11287b8'
+
+
+...

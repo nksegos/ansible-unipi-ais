@@ -1,0 +1,19 @@
+---
+
+- name: Start {{ producer_platform }} producer client
+  command:
+    cmd: |
+      {{ producer_base }}/venv/bin/python3 {{ producer_base }}/bin/{{ producer_platform }}-producer-realtime.py -i {{ producer_base }}/data/{{ dataset_id }}_peak_enriched.csv 
+  async: 7200
+  poll: 0
+  register: producer_task
+
+- name: Wait for async {{ producer_platform }} producer process to exit
+  async_status:
+    jid: "{{ producer_task.ansible_job_id }}"
+  register: async_poll_producer
+  until: async_poll_producer.finished
+  retries: 120
+  delay: 60
+
+...
