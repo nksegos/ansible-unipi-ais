@@ -1,0 +1,15 @@
+---
+
+- name: Deploy Kafka Broker systemd service
+  template:
+    src: "templates/services/kafka-broker.service.j2"
+    dest: "/usr/lib/systemd/system/kafka-broker.service"
+
+- name: Start Kafka Broker
+  systemd_service:
+    name: "kafka-broker"
+    daemon_reload: true
+    enabled: true
+    state: started
+
+...

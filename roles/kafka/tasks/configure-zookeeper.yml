@@ -1,0 +1,15 @@
+---
+
+- name: Set dataDir in ZooKeeper config
+  lineinfile:
+    path: "{{ kafka_main }}/config/zookeeper.properties"
+    regexp: 'dataDir[ ]?='
+    line: "dataDir = {{ zookeeper_data_dir }}"
+
+- name: Set clientPortAddress in ZooKeeper config
+  lineinfile:
+    path: "{{ kafka_main }}/config/zookeeper.properties"
+    regexp: 'clientPortAddress[ ]?='
+    line: "clientPortAddress = 0.0.0.0"
+
+...

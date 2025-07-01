@@ -1,0 +1,45 @@
+---
+
+- name: Create the kafka group
+  group:
+    name: kafka
+    state: present
+
+- name: Create the kafka user
+  user:
+    name: kafka
+    comment: Apache Kafka Server
+    group: kafka
+    create_home: false
+    shell: /bin/false
+    state: present
+
+- name: Install the Java platform
+  apt:
+    name: "default-jdk"
+    state: present
+
+- name: Derive JAVA_HOME
+  shell:
+    cmd: "readlink -f /usr/bin/javac | sed 's:/bin/javac::'"
+  register: java_home_search
+
+- name: Persist JAVA_HOME
+  set_fact:
+    java_home_dir: "{{ java_home_search.stdout }}"
+
+- name: Create any directories required
+  file:
+    name: "{{ dependency_dir}}"
+    state: directory
+    owner: kafka
+    group: kafka
+    mode: '755'
+  loop:
+    - "{{ kafka_log_dir }}"
+    - "{{ kafka_application_log_dir }}"
+    - "{{ zookeeper_data_dir }}"
+  loop_control:
+    loop_var: 'dependency_dir'
+
+...

@@ -1,0 +1,59 @@
+---
+
+#- name: Generate Broker ID
+#  block:
+#
+#    - name: Get a number from hostname
+#      shell:
+#        cmd: set -o pipefail; hostname | sed 's/[^0-9]*//g'
+#      register: hostname_num
+#      args:
+#        executable: /bin/bash
+#
+#    - name: Set broker_id
+#      set_fact:
+#        broker_id: "{{ hostname_num.stdout }}"
+
+- name: Set broker.id in kafka config
+  lineinfile:
+    path: "{{ kafka_main }}/config/server.properties"
+    regexp: '^broker\.id[ ]?='
+    line: "broker.id = {{ inventory_hostname | regex_replace('[^0-9]*','') }}"
+
+- name: Set log.dirs in kafka config
+  lineinfile:
+    path: "{{ kafka_main }}/config/server.properties"
+    regexp: '^log\.dirs[ ]?='
+    line: "log.dirs = {{ kafka_log_dir }}"
+
+- name: Set zookeeper.connect in kafka config
+  lineinfile:
+    path: "{{ kafka_main }}/config/server.properties"
+    regexp: '^zookeeper\.connect[ ]?='
+    line: "zookeeper.connect = {{ zookeeper_address }}"
+
+- name: Set listeners in kafka config
+  lineinfile:
+    path: "{{ kafka_main }}/config/server.properties"
+    regexp: '^#listeners[ ]?=*'
+    line: "listeners = REMOTE://0.0.0.0:{{ kafka_broker_port }}"
+
+- name: Set advertised.listeners in kafka config
+  lineinfile:
+    path: "{{ kafka_main }}/config/server.properties"
+    regexp: '^#advertised.listeners[ ]?=*'
+    line: 'advertised.listeners = REMOTE://{{ inventory_hostname }}:{{ kafka_broker_port }}'
+
+- name: Set listener.security.protocol.map in kafka config
+  lineinfile:
+    path: "{{ kafka_main }}/config/server.properties"
+    regexp: '^#listener.security.protocol.map[ ]?=*'
+    line: 'listener.security.protocol.map = REMOTE:PLAINTEXT,PLAINTEXT:PLAINTEXT'
+
+- name: Set inter.broker.listener.name in kafka config
+  lineinfile:
+    path: "{{ kafka_main }}/config/server.properties"
+    regexp: '^#inter.broker.listener.name[ ]?='
+    line: 'inter.broker.listener.name = REMOTE'
+
+...

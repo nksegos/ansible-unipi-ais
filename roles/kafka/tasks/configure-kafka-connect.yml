@@ -1,0 +1,135 @@
+---
+
+- name: Load Apache Kafka release info
+  include_vars:
+    file: kafka-releases.yml
+
+- name: Load database vars
+  include_vars:
+    dir: "{{ role_path }}/../database/vars/"
+
+- name: Check if a database_host has been supplied to the task and if not, try to pull one from the inventory
+  block:
+
+    - name: Evaluate contents of database_host
+      include_role:
+        name: common
+        tasks_from: var-evaluator.yml
+      vars:
+        eval_var: 'database_host'
+  
+  rescue:
+
+    - name: Attempt to pull database host from the inventory 
+      set_fact:
+        database_host: "{{ groups['database'] | default(['']) | first }}"
+
+    - name: Re-evaluate database_host var
+      include_role:
+        name: common
+        tasks_from: var-evaluator.yml
+      vars:
+        eval_var: 'database_host'
+
+- name: Download Confluent's Kafka JDBC Connector archive if not already present
+  get_url:
+    url: "{{ latest_jdbc_connector }}"
+    dest: "{{ role_path }}/files/kafka-connectors/{{ latest_jdbc_connector.split('/')[-1] }}"
+    checksum: "{{ latest_jdbc_connector_checksum }}"
+    timeout: 1800
+    force: false
+    tmp_dest: "{{ role_path }}/files/kafka-connectors"
+  run_once: true
+  become: false
+  delegate_to: localhost
+
+- name: Copy tarball to {{ inventory_hostname }}
+  copy:
+    src: "{{ role_path }}/files/kafka-connectors/{{ latest_jdbc_connector.split('/')[-1] }}"
+    dest: "{{ kafka_base_dir }}/{{ latest_jdbc_connector.split('/')[-1] }}"
+    owner: root
+    group: kafka
+    force: true
+
+- name: Create plugins dir
+  file:
+    name: "{{ kafka_main }}/plugins/confluentinc-kafka-connect-jdbc"
+    state: directory
+    owner: kafka
+    group: kafka
+    mode: '755'
+
+- name: Decompress JDBC connector archive
+  unarchive:
+    remote_src: true
+    src: "{{ kafka_base_dir }}/{{ latest_jdbc_connector.split('/')[-1] }}"
+    dest: "{{ kafka_main }}/plugins/confluentinc-kafka-connect-jdbc/"
+    owner: kafka
+    group: kafka
+    mode: '755'
+
+- name: Set bootstrap.servers in kafka connect config
+  lineinfile:
+    path: "{{ kafka_main }}/config/connect-standalone.properties"
+    regexp: '^[#]?bootstrap\.servers[ ]?=*'
+    line: "bootstrap.servers = {{ inventory_hostname }}:9092"
+
+- name: Set plugin.path in kafka connect config
+  lineinfile:
+    path: "{{ kafka_main }}/config/connect-standalone.properties"
+    regexp: '^plugin\.path[ ]?='
+    line: "plugin.path = {{ kafka_main }}/plugins"
+
+- name: Deploy Connector config files for each topic set up
+  template:
+    src: "templates/configs/jdbc-sink-connector.properties.j2"
+    dest: "{{ kafka_main }}/config/{{ topic_name | regex_replace('_', '-') }}-jdbc-sink-connector.properties"
+    owner: kafka
+    group: kafka
+    mode: '755'
+  loop: "{{ kafka_topics }}"
+  loop_control:
+    loop_var: 'topic_name'
+
+- name: Deploy Connector Benchmark config files for each topic set up
+  template:
+    src: "templates/configs/jdbc-sink-connector-bench.properties.j2"
+    dest: "{{ kafka_main }}/config/{{ topic_name | regex_replace('_', '-') }}-jdbc-sink-connector-bench.properties"
+    owner: kafka
+    group: kafka
+    mode: '755'
+  loop: "{{ kafka_topics }}"
+  loop_control:
+    loop_var: 'topic_name'
+  when: ( include_benchmark_connectors | default(False) | bool ) == True
+
+- name: Deploy topic creator script, to guarantee the existence of the topics before connector startup
+  template:
+    src: "templates/scripts/create-ais-topics.sh.j2"
+    dest: '/usr/local/bin/create-ais-topics.sh'
+    owner: kafka
+    group: kafka
+    mode: '755'
+
+- name: Deploy benchmark topic creator script, to guarantee the existence of the topics before connector startup
+  template:
+    src: "templates/scripts/create-ais-topics-bench.sh.j2"
+    dest: '/usr/local/bin/create-ais-topics-bench.sh'
+    owner: kafka
+    group: kafka
+    mode: '755'
+  when: ( include_benchmark_connectors | default(False) | bool ) == True
+
+- name: Deploy Kafka Connect systemd service
+  template:
+    src: "templates/services/kafka-connect.service.j2"
+    dest: "/usr/lib/systemd/system/kafka-connect.service"
+
+- name: Start Kafka Connect
+  systemd_service:
+    name: "kafka-connect"
+    daemon_reload: true
+    enabled: true
+    state: started
+
+...

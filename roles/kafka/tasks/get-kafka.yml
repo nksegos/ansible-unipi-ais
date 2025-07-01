@@ -1,0 +1,76 @@
+---
+
+- name: Load Apache Kafka release info
+  include_vars:
+    file: kafka-releases.yml
+
+- name: Check if there's been a version override and ensure it exists
+  block:
+
+    - name: Evaluate contents of kafka_version
+      include_role:
+        name: common
+        tasks_from: var-evaluator.yml
+      vars:
+        eval_var: 'kafka_version'
+
+    - name: Set dict safe of kafka_version, if non-empty
+      set_fact:
+        kafka_version_dict_safe: "_{{ kafka_version | replace('.','_') }}_"
+
+  rescue:
+
+    - name: Set kafka_version to latest, if not overridden
+      set_fact:
+        kafka_version: "{{ latest_kafka_release }}"
+        kafka_version_dict_safe: "_{{ latest_kafka_release | replace('.','_') }}_"
+
+- name: Fail if the request kafka_version doesn't exist
+  fail:
+    msg: 'Could not find an entry for Kafka version {{ kafka_version }} in registry.'
+  when: release_checksums[kafka_version_dict_safe] is not defined
+
+- name: Set helper vars
+  set_fact:
+    kafka_release_url: "{{ kafka_release_url_template | replace('_VERSION_', kafka_version) }}/{{ kafka_tarball_template | replace('_VERSION_', kafka_version) }}"
+    kafka_tarball: "{{ kafka_tarball_template | replace('_VERSION_', kafka_version) }}"
+    kafka_installation: "{{ kafka_base_dir }}/{{ kafka_tarball_template | replace('_VERSION_', kafka_version) | replace('.tgz','') }}"
+
+- name: Download Apache Kafka {{ kafka_version }} tarball if not already present
+  get_url:
+    url: "{{ kafka_release_url }}"
+    dest: "{{ role_path }}/files/kafka-releases/{{ kafka_tarball }}"
+    checksum: "{{ release_checksums[kafka_version_dict_safe] }}"
+    timeout: 1800
+    force: false
+    tmp_dest: "{{ role_path }}/files/kafka-releases"
+  run_once: true
+  become: false
+  delegate_to: localhost
+
+- name: Copy tarball to {{ inventory_hostname }}
+  copy:
+    src: "{{ role_path }}/files/kafka-releases/{{ kafka_tarball }}"
+    dest: "{{ kafka_base_dir }}/{{ kafka_tarball }}"
+    owner: root
+    group: kafka
+    force: true
+
+- name: Remove installation if reinstall flag is set
+  file:
+    path: "{{ kafka_installation }}"
+    state: absent
+  when: ( force_reinstall | default(false) | bool ) == true
+
+- name: Unarchive tarball
+  unarchive:
+    remote_src: true
+    src: "{{ kafka_base_dir }}/{{ kafka_tarball }}"
+    dest: "{{ kafka_base_dir }}"
+    creates: "{{ kafka_installation }}"
+    owner: kafka
+    group: kafka
+    mode: '755'
+    
+
+...

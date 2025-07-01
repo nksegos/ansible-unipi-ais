@@ -1,0 +1,19 @@
+---
+
+- name: Stop Kafka Connect service
+  systemd_service:
+    name: "kafka-connect"
+    state: stopped
+
+- name: Delete existing Kafka topics
+  shell:
+    cmd: |
+      {{ kafka_main }}/bin/kafka-topics.sh --bootstrap-server {{ inventory_hostname }}:{{ kafka_broker_port }} --delete --if-exists --topic {{ kafka_topics | select('match', '.*static.*') | first }} ;
+      {{ kafka_main }}/bin/kafka-topics.sh --bootstrap-server {{ inventory_hostname }}:{{ kafka_broker_port }} --delete --if-exists --topic {{ kafka_topics | select('match', '.*kinematic.*') | first }} ;
+
+- name: Start Kafka Connect service and implicitly re-create topics
+  systemd_service:
+    name: "kafka-connect"
+    state: started
+
+...

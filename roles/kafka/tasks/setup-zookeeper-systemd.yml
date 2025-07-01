@@ -1,0 +1,15 @@
+---
+
+- name: Deploy ZooKeeper systemd service for Kafka
+  template:
+    src: "templates/services/kafka-zookeeper.service.j2"
+    dest: "/usr/lib/systemd/system/kafka-zookeeper.service"
+
+- name: Start ZooKeeper for Kafka
+  systemd_service:
+    name: "kafka-zookeeper"
+    daemon_reload: true
+    enabled: true
+    state: started
+
+...

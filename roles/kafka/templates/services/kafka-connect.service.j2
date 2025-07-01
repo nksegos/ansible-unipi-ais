@@ -1,0 +1,26 @@
+[Unit]
+Description=Kafka Connect Standalone
+Documentation=https://docs.confluent.io/platform/current/connect/index.html
+Requires=network.target kafka-zookeeper.service kafka-broker.service
+After=network.target kafka-zookeeper.service kafka-broker.service
+
+[Service]
+Type=simple
+User=kafka
+Group=kafka
+Environment=LOG_DIR={{ kafka_application_log_dir }}
+ExecStartPre=/usr/local/bin/create-ais-topics.sh # Connect depends on the existence of the topics being sinked
+{% if ( include_benchmark_connectors | default(False) | bool ) == True %}
+ExecStartPre=/usr/local/bin/create-ais-topics-bench.sh
+{% endif %}
+
+ExecStart={{ kafka_main }}/bin/connect-standalone.sh \
+  {{ kafka_main }}/config/connect-standalone.properties \
+  {% for topic_name in kafka_topics %}{{ kafka_main }}/config/{{ topic_name | regex_replace('_', '-') }}-jdbc-sink-connector.properties {% endfor %}{% if ( include_benchmark_connectors | default(False) | bool ) == True %}{% for topic_name in kafka_topics %}{{ kafka_main }}/config/{{ topic_name | regex_replace('_', '-') }}-jdbc-sink-connector-bench.properties {% endfor %}{% endif %}
+
+Restart=on-failure
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target
+

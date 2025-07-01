@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+{% for topic_name in kafka_topics %}
+
+{{ kafka_main }}/bin/kafka-topics.sh \
+	--bootstrap-server {{ inventory_hostname }}:9092 \
+	--create \
+	--if-not-exists \
+	--topic {{ topic_name }}_bench \
+	--partitions {{ kafka_topic_partition_no }} \
+	--replication-factor {{ kafka_topic_replication_factor }}
+
+{% endfor %}
+
+

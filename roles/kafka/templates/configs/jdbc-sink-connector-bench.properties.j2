@@ -1,0 +1,29 @@
+name=jdbc-sink-{{ topic_name | regex_replace('_', '-') }}-bench
+connector.class=io.confluent.connect.jdbc.JdbcSinkConnector
+tasks.max=2
+
+topics={{ topic_name }}_bench
+
+# DB Config
+connection.url=jdbc:postgresql://{{ database_host }}:{{ database_port }}/{{ dbname }}_bench
+connection.user={{ database_roles['kafka'].name }}
+connection.password={{ database_roles['kafka'].password }}
+
+# Insert settings(inserts for dynamic data, update on insert for static data, no table autocreation or altering)
+insert.mode={% if 'static' in topic_name %}upsert{% else %}insert{% endif %}
+
+auto.create=false
+auto.evolve=false
+
+# Map topic → table by name
+table.name.format={% if 'static' in topic_name %}{{ ais_static_table }}{% else %}{{ais_kinematic_table }}{% endif %}
+
+{% if 'static' in topic_name %}
+pk.mode=record_value
+pk.fields={{ static_topic_pk }}
+{% endif %}
+
+# Converters for plain JSON(i.e. key is null, value is schema + payload)
+key.converter=org.apache.kafka.connect.storage.StringConverter
+value.converter=org.apache.kafka.connect.json.JsonConverter
+value.converter.schemas.enable=true

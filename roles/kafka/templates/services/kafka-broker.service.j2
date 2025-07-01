@@ -1,0 +1,17 @@
+[Unit]
+Description=Apache Kafka server (broker)
+Documentation=http://kafka.apache.org/documentation.html
+Requires=network.target
+After=network.target kafka-zookeeper.service
+
+[Service]
+Type=simple
+User=kafka
+Group=kafka
+Environment=JAVA_HOME={{ java_home_dir }}
+Environment=LOG_DIR={{ kafka_application_log_dir }}
+ExecStart={{ kafka_main }}/bin/kafka-server-start.sh {{ kafka_main }}/config/server.properties
+ExecStop={{ kafka_main }}/bin/kafka-server-stop.sh
+
+[Install]
+WantedBy=multi-user.target
