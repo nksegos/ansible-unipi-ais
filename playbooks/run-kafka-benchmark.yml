@@ -1,0 +1,126 @@
+---
+
+- hosts: localhost
+  become: false
+  gather_facts: yes
+  tasks:
+
+    - name: Check if producer_node is set and if not, try to pull one from the inventory
+      block:
+
+        - name: Evaluate contents of producer_node
+          include_role:
+            name: common
+            tasks_from: var-evaluator.yml
+          vars:
+            eval_var: 'producer_node'
+
+      rescue:
+
+        - name: Attempt to pull producer_node from the inventory
+          set_fact:
+            producer_node: "{{ groups['producer'] | default(['']) | first }}"
+
+        - name: Re-evaluate producer_node
+          include_role:
+            name: common
+            tasks_from: var-evaluator.yml
+          vars:
+            eval_var: 'producer_node'
+
+    - name: Check if consumer_node is set and if not, try to pull one from the inventory
+      block:
+
+        - name: Evaluate contents of consumer_node
+          include_role:
+            name: common
+            tasks_from: var-evaluator.yml
+          vars:
+            eval_var: 'consumer_node'
+
+      rescue:
+
+        - name: Attempt to pull consumer_node from the inventory
+          set_fact:
+            consumer_node: "{{ groups['consumer'] | default(['']) | first }}"
+
+        - name: Re-evaluate consumer_node
+          include_role:
+            name: common
+            tasks_from: var-evaluator.yml
+          vars:
+            eval_var: 'consumer_node'
+
+    - name: Check if database_node is set and if not, try to pull one from the inventory
+      block:
+
+        - name: Evaluate contents of database_node
+          include_role:
+            name: common
+            tasks_from: var-evaluator.yml
+          vars:
+            eval_var: 'database_node'
+
+      rescue:
+
+        - name: Attempt to pull database_node from the inventory
+          set_fact:
+            database_node: "{{ groups['database'] | default(['']) | first }}"
+
+        - name: Re-evaluate database_node
+          include_role:
+            name: common
+            tasks_from: var-evaluator.yml
+          vars:
+            eval_var: 'database_node'
+
+    - name: Check if kafka_node is set and if not, try to pull one from the inventory
+      block:
+
+        - name: Evaluate contents of database_node
+          include_role:
+            name: common
+            tasks_from: var-evaluator.yml
+          vars:
+            eval_var: 'kafka_node'
+
+      rescue:
+
+        - name: Attempt to pull database_node from the inventory
+          set_fact:
+            kafka_node: "{{ groups['broker'] | default(['']) | first }}"
+
+        - name: Re-evaluate kafka_node
+          include_role:
+            name: common
+            tasks_from: var-evaluator.yml
+          vars:
+            eval_var: 'kafka_node'
+
+    - name: Copy datasets to {{ producer_node }}
+      include_role:
+        name: producer
+        tasks_from: copy-datasets.yml
+        apply:
+          delegate_to: "{{ producer_node }}"
+          become: true
+        public: true
+
+    - name: Run kafka producer-consumer latency benchmark for yearly peaks
+      include_role:
+        name: common
+        tasks_from: run-benchmark-kafka.yml
+        apply:
+          become: true
+      vars:
+        database_host: "{{ database_node }}"
+        consumer_host: "{{ consumer_node }}"
+        producer_host: "{{ producer_node }}"
+        kafka_broker_host: "{{ kafka_node }}"
+        dataset_id: "{{ peak_of_year }}"
+      loop: "{% if dataset_year is defined %}{{ [ dataset_year ] }}{% else %}{{ dataset_releases['dynamic'] | list }}{% endif %}"
+      loop_control:
+        loop_var: 'peak_of_year'
+        label: "Producer-Consumer latency benchmark for peak of year {{ peak_of_year }}"
+
+...

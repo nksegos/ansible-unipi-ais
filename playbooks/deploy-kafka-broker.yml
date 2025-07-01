@@ -1,0 +1,63 @@
+---
+
+- hosts: "{{ groups['omni'] | default([]) | union( groups['broker'] | default([]) ) }}"
+  become: yes
+  gather_facts: yes
+  pre_tasks:
+
+    - name: Check that role is either 'omni' or 'broker'
+      include_role:
+        name: common
+        tasks_from: role-check.yml
+      vars:
+        target_role: 'broker'
+
+    - name: Run package upgrades
+      include_role:
+        name: common
+        tasks_from: upgrade-packages.yml
+
+  tasks:
+
+    - name: Install dependencies
+      include_role:
+        name: kafka
+        tasks_from: setup-kafka-deps.yml
+        public: true
+
+    - name: Install kafka
+      include_role:
+        name: kafka
+        tasks_from: get-kafka.yml
+        public: true
+
+    - name: Link kafka installation
+      include_role:
+        name: common
+        tasks_from: link-component.yml
+      vars:
+        link_target: "{{ kafka_installation }}"
+        link_name: "{{ kafka_main }}"
+        force_link: "{{ force_reinstall | default(false) }}"
+  
+    - name: Configure ZooKeeper
+      include_role:
+        name: kafka
+        tasks_from: configure-zookeeper.yml
+
+    - name: Setup ZooKeeper SystemD service
+      include_role:
+        name: kafka
+        tasks_from: setup-zookeeper-systemd.yml
+
+    - name: Configure Kafka Broker
+      include_role:
+        name: kafka
+        tasks_from: configure-kafka-broker.yml
+
+    - name: Setup Kafka SystemD service
+      include_role:
+        name: kafka
+        tasks_from: setup-kafka-systemd.yml
+
+...

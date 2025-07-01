@@ -1,0 +1,30 @@
+---
+
+- hosts: "{{ groups['broker'] | default([]) }}"
+  become: yes
+  gather_facts: yes
+  pre_tasks:
+
+    - name: Check that role is set to 'broker'
+      include_role:
+        name: common
+        tasks_from: role-check.yml
+      vars:
+        target_role: 'broker'
+        strict_check: true
+
+    - name: Run package upgrades
+      include_role:
+        name: common
+        tasks_from: upgrade-packages.yml
+
+  tasks:
+
+    - name: Setup Kafka Connect and configure DB connectors
+      include_role:
+        name: kafka
+        tasks_from: configure-kafka-connect.yml
+      vars:
+        include_latency_benchmark_configs: "{{ include_benchmark_connectors | default(False) }}"
+
+...

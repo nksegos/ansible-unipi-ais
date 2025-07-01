@@ -1,0 +1,38 @@
+---
+
+- hosts: "{{ groups['producer'] | default([])  }}"
+  become: true
+  gather_facts: yes
+  pre_tasks:
+
+    - name: Check that role is 'producer'
+      include_role:
+        name: common
+        tasks_from: role-check.yml
+      vars:
+        target_role: 'producer'
+        strict_check: true
+
+  tasks:
+
+    - name: Copy datasets to host
+      include_role:
+        name: producer
+        tasks_from: copy-datasets.yml
+        public: true
+
+    - name: Run database producer for yearly peak datasets
+      include_role:
+        name: producer
+        tasks_from: run-producer.yml
+      vars:
+        producer_platform: 'kafka'
+        database_host: "{{ database_node }}"
+        kafka_broker_host: "{{ kafka_node }}"
+        dataset_id: "{{ peak_of_year }}"
+      loop: "{% if dataset_year is defined %}{{ [ dataset_year ] }}{% else %}{{ dataset_releases['dynamic'] | list }}{% endif %}"
+      loop_control:
+        loop_var: 'peak_of_year'
+        label: "Kafka Producer process for peak dataset of year {{ peak_of_year }}"
+
+...

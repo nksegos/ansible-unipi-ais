@@ -1,0 +1,13 @@
+---
+
+- hosts: localhost
+  become: no
+  gather_facts: no
+  tasks:
+
+    - name: Destroy VM
+      include_role:
+        name: vm-lifecycle
+        tasks_from: remove-vm.yml
+
+...

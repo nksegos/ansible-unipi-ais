@@ -1,0 +1,28 @@
+---
+
+- hosts: "{{ groups['omni'] | default([]) | union( groups['producer'] | default([]) ) }}"
+  become: yes
+  gather_facts: yes
+  pre_tasks:
+
+    - name: Check that role is either 'omni' or 'producer'
+      include_role:
+        name: common
+        tasks_from: role-check.yml
+      vars:
+        target_role: 'producer'
+
+    - name: Run package upgrades
+      include_role:
+        name: common
+        tasks_from: upgrade-packages.yml
+
+  tasks:
+
+    - name: Deploy producer stack
+      include_role:
+        name: producer
+        tasks_from: setup-producer-env.yml
+        public: true
+
+...

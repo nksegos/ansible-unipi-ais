@@ -1,0 +1,13 @@
+---
+
+- hosts: localhost
+  become: no
+  gather_facts: no
+  tasks:
+
+    - name: Process benchmark results
+      include_role:
+        name: common
+        tasks_from: process-benchmark-results.yml
+
+...

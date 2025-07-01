@@ -1,0 +1,13 @@
+---
+
+- hosts: localhost
+  become: no
+  gather_facts: yes
+  tasks:
+
+    - name: Spin up VMs
+      include_role:
+        name: vm-lifecycle
+        tasks_from: create-vm.yml
+
+...

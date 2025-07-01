@@ -1,0 +1,15 @@
+---
+
+- hosts: "{{ target_host }}"
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Set role to '{{ target_role }}'
+      include_role:
+        name: common
+        tasks_from: set-role.yml
+      vars:
+        change_to: '{{ target_role }}'
+
+...

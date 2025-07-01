@@ -1,0 +1,42 @@
+---
+
+- hosts: "{{ groups['omni'] | default([]) | union( groups['consumer'] | default([]) ) }}"
+  become: yes
+  gather_facts: yes
+  pre_tasks:
+
+    - name: Check that role is either 'omni' or 'consumer'
+      include_role:
+        name: common
+        tasks_from: role-check.yml
+      vars:
+        target_role: 'consumer'
+
+    - name: Run package upgrades
+      include_role:
+        name: common
+        tasks_from: upgrade-packages.yml
+
+  tasks:
+
+    - name: Install Redis 8
+      include_role:
+        name: consumer
+        tasks_from: install-redis.yml
+
+    - name: Install PyEnv
+      include_role:
+        name: consumer
+        tasks_from: install-pyenv.yml
+
+    - name: Deploy consumer env
+      include_role:
+        name: consumer
+        tasks_from: setup-consumer-env.yml
+
+    - name: Configure application services
+      include_role:
+        name: consumer
+        tasks_from: configure-application-services.yml
+
+...

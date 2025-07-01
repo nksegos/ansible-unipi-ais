@@ -1,0 +1,23 @@
+---
+
+- hosts: "{{ groups['database'] | default([])  }}"
+  become: true
+  gather_facts: yes
+  pre_tasks:
+
+    - name: Check that role is 'database'
+      include_role:
+        name: common
+        tasks_from: role-check.yml
+      vars:
+        target_role: 'database'
+        strict_check: true
+
+  tasks:
+
+    - name: Flush message tables on DB
+      include_role:
+        name: database
+        tasks_from: flush-message-tables.yml
+
+...

@@ -1,0 +1,13 @@
+---
+
+- hosts: localhost
+  become: no
+  gather_facts: no
+  tasks:
+
+    - name: Retrieve UniPi AIS dataset
+      include_role:
+        name: producer
+        tasks_from: get-ais-dataset.yml
+
+...

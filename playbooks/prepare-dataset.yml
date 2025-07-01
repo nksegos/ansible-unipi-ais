@@ -1,0 +1,13 @@
+---
+
+- hosts: localhost
+  become: no
+  gather_facts: no
+  tasks:
+
+    - name: Prepare UniPi AIS dataset for use with platform
+      include_role:
+        name: producer
+        tasks_from: prepare-ais-dataset.yml
+
+...

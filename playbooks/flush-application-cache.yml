@@ -1,0 +1,33 @@
+---
+
+- hosts: "{{ groups['consumer'] | default([])  }}"
+  become: true
+  gather_facts: yes
+  pre_tasks:
+
+    - name: Check that role is 'consumer'
+      include_role:
+        name: common
+        tasks_from: role-check.yml
+      vars:
+        target_role: 'consumer'
+        strict_check: true
+
+  tasks:
+
+    - name: Stop the cache manager service
+      systemd_service:
+        name: 'cache-manager'
+        state: stopped
+
+    - name: Flush Redis
+      command:
+        cmd: |
+          /usr/bin/redis-cli flushall
+
+    - name: Start the cache manager service
+      systemd_service:
+        name: 'cache-manager'
+        state: started
+
+...

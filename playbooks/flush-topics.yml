@@ -1,0 +1,23 @@
+---
+
+- hosts: "{{ groups['broker'] | default([])  }}"
+  become: true
+  gather_facts: yes
+  pre_tasks:
+
+    - name: Check that role is 'broker'
+      include_role:
+        name: common
+        tasks_from: role-check.yml
+      vars:
+        target_role: 'broker'
+        strict_check: true
+
+  tasks:
+
+    - name: Flush message topics on broker
+      include_role:
+        name: kafka
+        tasks_from: flush-topics.yml
+
+...

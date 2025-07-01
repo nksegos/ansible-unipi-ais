@@ -1,0 +1,45 @@
+---
+
+- hosts: "{{ groups['omni'] | default([]) | union( groups['database'] | default([]) ) }}"
+  become: yes
+  gather_facts: yes
+  pre_tasks:
+
+    - name: Check that role is either 'omni' or 'database'
+      include_role:
+        name: common
+        tasks_from: role-check.yml
+      vars:
+        target_role: 'database'
+
+    - name: Run package upgrades
+      include_role:
+        name: common
+        tasks_from: upgrade-packages.yml
+
+  tasks:
+
+    - name: Install postgres repo
+      include_role:
+        name: database
+        tasks_from: setup-postgres-repo.yml
+
+    - name: Install postgres
+      include_role:
+        name: database
+        tasks_from: install-postgres-binaries.yml
+
+    - name: Configure postgres
+      include_role:
+        name: database
+        tasks_from: configure-postgres-server.yml
+    
+    - name: Create AIS db
+      include_role:
+        name: database
+        tasks_from: create-ais-db.yml
+      vars:
+        include_benchmark_ddl: "{{ include_benchmark_db | default(False) }}"
+        load_ais_code_type_seed: "{{ seed_codes_types_table | default(True) }}"
+
+...

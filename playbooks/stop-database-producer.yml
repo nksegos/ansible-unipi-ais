@@ -1,0 +1,25 @@
+---
+
+- hosts: "{{ groups['producer'] | default([])  }}"
+  become: true
+  gather_facts: yes
+  pre_tasks:
+
+    - name: Check that role is 'producer'
+      include_role:
+        name: common
+        tasks_from: role-check.yml
+      vars:
+        target_role: 'producer'
+        strict_check: true
+
+  tasks:
+
+    - name: Stop any database producers running on host
+      include_role:
+        name: producer
+        tasks_from: kill-producer.yml
+      vars:
+        producer_platform: 'database'
+
+...
