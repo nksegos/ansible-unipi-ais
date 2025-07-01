@@ -1,0 +1,27 @@
+---
+
+lab:
+  hosts:
+  vars:
+    ansible_user: 'ansible'
+
+omni:
+  hosts:
+
+broker:
+  hosts:
+    t2:
+
+producer:
+  hosts:
+    t1:
+
+consumer:
+  hosts:
+    t4:
+
+database:
+  hosts:
+    t3:
+
+...
