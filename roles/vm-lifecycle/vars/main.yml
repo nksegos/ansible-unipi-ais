@@ -1,0 +1,29 @@
+---
+vm_count: 1
+vm_name_prefix: 't'
+vm_ram: 2048
+vm_vcpu: 1
+vm_disk: '20G'
+vm_os: 'debian-12'
+vm_image_storage: '/PATH/TO/YOUR/IMAGE/STORAGE/DIR'
+vm_root_pass: "{{ vm_root_pass_vault }}"
+
+vm_package_registry:
+  - 'bc'
+  - 'vim'
+  - 'htop'
+  - 'wget'
+  - 'tcl'
+  - 'screen'
+  - 'nmap'
+  - 'python3-full'
+  - 'python3-pip'
+  - 'lsof'
+  - 'locate'
+  - 'unzip'
+#  - 'libaio'
+#  - 'bind-utils'
+#  - 'net-tools'
+#  - 'openssl11-libs'
+
+...

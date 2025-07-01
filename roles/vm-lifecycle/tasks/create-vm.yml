@@ -1,0 +1,184 @@
+---
+
+- name: Load vaulted vars
+  include_vars:
+    file: main-vault.yml
+
+- name: Ensure libvirtd is running
+  systemd_service:
+    name: libvirtd
+    state: started
+    enabled: yes
+
+- name: Generate SSH keypair, if missing
+  include_role:
+    name: common
+    tasks_from: generate-ssh-keypair.yml
+  vars:
+    ssh_keypair_user: "{{ lookup('env','USER') }}"
+
+- name: Check if there's been a package override
+  block:
+
+    - name: Evaluate contents of package override
+      include_role:
+        name: common
+        tasks_from: var-evaluator.yml
+      vars:
+        eval_var: 'install_packages'
+
+  rescue:
+
+    - name: Set install_packages from package registry
+      set_fact:
+        install_packages: "{{ vm_package_registry | join(',') }}"
+
+- name: Get currently existing VMs
+  virt:
+    command: list_vms
+  register: all_vms
+
+- name: Set the minimum ID for VMs of using the "{{ vm_name_prefix }}" prefix
+  set_fact: 
+    min_vm_id: "{{ all_vms.list_vms | select('search', vm_name_prefix) | default(['t0'], true) | map('regex_search', '\\d+') | map('int') | max | int }}"
+
+- name: Build the VM image
+  shell: |
+    virt-builder {{ vm_os }} \
+        --size {{ vm_disk }} \
+        --format qcow2 \
+        --network \
+        --timezone $(timedatectl show | grep 'Timezone' | awk -F= '{print $2}') \
+        --hostname {{ vm_name_prefix }}{{ vm_id }} \
+        --root-password password:{{ vm_root_pass }} \
+        --copy-in {{ role_path }}/files/scripts:/root \ 
+        --firstboot-command "$FIRSTBOOT_COMMAND" \
+        --firstboot-install "$FIRSTBOOT_PACKAGES" \
+        --ssh-inject "root:string:{{ ssh_key.public_key }}" \
+        --output {{ vm_image_storage }}/{{ vm_name_prefix }}{{ vm_id }}.qcow2
+  environment:
+    LIBGUESTFS_DEBUG: 1 
+    LIBGUESTFS_TRACE: 1
+    FIRSTBOOT_COMMAND: "/root/scripts/iface_setup.sh > /root/firstboot.log 2>&1 && /root/scripts/setup_user.sh >> /root/firstboot.log 2>&1 && echo '\nexport LC_ALL=en_US.UTF-8\n' >> /etc/profile && apt update"
+    FIRSTBOOT_PACKAGES: "{{ install_packages }}"
+  become: true
+  loop: "{{ range(( min_vm_id | int ) + 1, ( min_vm_id | int ) + ( vm_count | int ) + 1) | list }}"
+  loop_control:
+    loop_var: 'vm_id'
+
+- name: Start VMs
+  command: |
+    virt-install \
+      --import \
+      --name "{{ vm_name_prefix }}{{ vm_id }}" \
+      --ram {{ vm_ram }} \
+      --vcpu {{ vm_vcpu }} \
+      --disk path={{ vm_image_storage }}/{{ vm_name_prefix }}{{ vm_id }}.qcow2 \
+      --os-variant "{{ vm_os | regex_replace('-12', '11') }}" \
+      --network=network=default \
+      --noautoconsole
+  become: true
+  async: 1200
+  poll: 0
+  register: _bg_virt_inst
+  loop: "{{ range(( min_vm_id | int ) + 1, ( min_vm_id | int ) + ( vm_count | int ) + 1) | list }}"
+  loop_control:
+    label: "Start VM {{ vm_name_prefix }}{{ vm_id }}"
+    loop_var: 'vm_id'
+
+- name: Wait for the VMs to complete installation
+  async_status:
+    jid: "{{ item.ansible_job_id }}"
+  register: job_result
+  until: job_result.finished
+  retries: 120 
+  delay: 5
+  loop: "{{ _bg_virt_inst.results }}"
+  become: true
+
+- name: Wait for VM to get IP
+  shell:
+    cmd: |
+      virsh domifaddr {{ vm_name_prefix }}{{ vm_id }} | sed '/^$/d' | tail -1 | awk -F" " '{print $4}' | cut -f1 -d"/" | xargs
+  register: vm_ips
+  until: vm_ips.stdout != ''
+  retries: 6
+  delay: 10
+  become: true
+  loop: "{{ range(( min_vm_id | int ) + 1, ( min_vm_id | int ) + ( vm_count | int ) + 1) | list }}"
+  loop_control:
+    loop_var: 'vm_id'
+
+- name: Add VM IP to /etc/hosts 
+  lineinfile:
+    dest: /etc/hosts
+    regexp: '.* {{ vm_name_prefix}}{{ item.vm_id }}$'
+    line: "{{ item.stdout }} {{ vm_name_prefix }}{{ item.vm_id }}"
+    state: present
+  become: true
+  loop: "{{ vm_ips.results }}"
+  loop_control:
+    label: "Add IP address of VM {{ vm_name_prefix }}{{ item.vm_id }} to /etc/hosts"
+
+- name: Wait for the VM to be accessible via SSH 
+  wait_for:
+    host: "{{ vm_name_prefix }}{{ vm_id }}"
+    port: 22
+    delay: 20
+    timeout: 300 
+    state: started
+  loop: "{{ range(( min_vm_id | int ) + 1, ( min_vm_id | int ) + ( vm_count | int ) + 1) | list }}"
+  loop_control:
+    loop_var: 'vm_id'
+
+- name: Load SSH key
+  command: |
+    ssh-add /home/{{ lookup('env', 'USER') }}/.ssh/ansible_key
+
+- name: Add VM to inventory
+  add_host:
+    name: "{{ vm_name_prefix }}{{ vm_id }}"
+  loop: "{{ range(( min_vm_id | int ) + 1, ( min_vm_id | int ) + ( vm_count | int ) + 1) | list }}"
+  loop_control:
+    loop_var: 'vm_id'
+    label: "Add VM {{ vm_name_prefix }}{{ vm_id }} to ephemeral inventory" 
+
+- name: Persist inventory
+  include_role: 
+    name: common
+    tasks_from: regenerate-inventory.yml
+
+- name: Refresh inventory definition
+  meta: refresh_inventory
+
+- name: Add .vimrc
+  copy:
+    src: files/dotfiles/vimrc
+    dest: ~/.vimrc
+  delegate_to: "{{ vm_name_prefix }}{{ vm_id }}"
+  vars:
+    ansible_user: 'ansible'
+  loop: "{{ range(( min_vm_id | int ) + 1, ( min_vm_id | int ) + ( vm_count | int ) + 1) | list }}"
+  loop_control:
+    loop_var: 'vm_id'
+    label: "Add .vimrc to VM {{ vm_name_prefix }}{{ vm_id }}"
+
+- name: Add .bash_aliases 
+  copy:
+    src: files/dotfiles/bash_aliases
+    dest: ~/.bash_aliases
+  delegate_to: "{{ vm_name_prefix }}{{ vm_id }}"
+  vars:
+    ansible_user: 'ansible'
+  loop: "{{ range(( min_vm_id | int ) + 1, ( min_vm_id | int ) + ( vm_count | int ) + 1) | list }}"
+  loop_control:
+    loop_var: 'vm_id'
+    label: "Add .bash_aliases to VM {{ vm_name_prefix }}{{ vm_id }}"
+
+- name: Inform about completion
+  debug:
+    msg: '{{ vm_name_prefix }}{{ vm_id }} is up and running. Connect to it via ssh ansible@{{ vm_name_prefix }}{{ vm_id }}'
+  loop: "{{ range(( min_vm_id | int ) + 1, ( min_vm_id | int ) + ( vm_count | int ) + 1) | list }}"
+  loop_control:
+    loop_var: 'vm_id'
+...      

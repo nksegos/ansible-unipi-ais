@@ -1,0 +1,45 @@
+---
+
+- name: Ensure that target_vm is set
+  include_role:
+    name: common
+    tasks_from: var-evaluator.yml
+  vars:
+    eval_var: 'target_vm'
+
+- name: Stop VM {{ target_vm }}
+  virt:
+    name: "{{ target_vm }}"
+    command: destroy
+  become: true
+
+- name: Undefine VM {{ target_vm }}
+  virt:
+    name: "{{ target_vm }}"
+    command: undefine
+  become: true
+
+- name: Remove SSH fingerprints
+  command: |
+    ssh-keygen -f "/home/{{ lookup('env', 'USER') }}/.ssh/known_hosts" -R "{{ target_vm }}"
+
+- name: Remove /etc/hosts config
+  lineinfile:
+    dest: /etc/hosts
+    regexp: '.* {{ target_vm }}$'
+    state: absent
+  become: true
+
+- name: Remove VM image file
+  file:
+    path: "{{ vm_image_storage }}/{{ target_vm }}.qcow2"
+    state: absent
+
+- name: Remove VM from inventory
+  replace:
+    path: "{{ (role_path.split('/') | map('trim'))[:-2] | join('/') }}/inventories/lab.yml"
+    regexp: '(^([\t ]*){{ target_vm }}:\n(?:\2[\t ]+.*\n)*)'
+    replace: ''
+    backup: false
+
+...
