@@ -1,0 +1,14 @@
+---
+
+- name: Setup the PG repo
+  command:
+    cmd: '/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y'
+  listen: 'run pg repo setup'
+
+- name: Restart Postgres Server
+  systemd:
+    name: "postgresql@{{ pg_major_version}}-main"
+    state: restarted
+  listen: 'restart postgres'
+
+...

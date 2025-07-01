@@ -1,0 +1,9 @@
+---
+
+- name: Truncate {{ ais_static_table }} and {{ ais_kinematic_table }} on {{ inventory_hostname }}
+  command:
+    cmd: |
+      /usr/bin/psql -d {{ dbname }} -c 'TRUNCATE TABLE {{ ais_static_table }}; TRUNCATE TABLE {{ ais_kinematic_table }};'
+  become_user: 'postgres'
+
+...

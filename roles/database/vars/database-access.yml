@@ -1,0 +1,21 @@
+---
+
+database_roles:
+  producer:
+    name: 'kproducer'
+    password: "{{ kproducer_pass_vault }}"
+    state: 'present'
+  owner:
+    name: 'ais_manager'
+    password: "{{ ais_manager_pass_vault }}"
+    state: 'present'
+  consumer:
+    name: 'kconsumer'
+    password: "{{ kconsumer_pass_vault }}"
+    state: 'present'
+  kafka:
+    name: 'kbroker'
+    password: "{{ kbroker_pass_vault }}"
+    state: 'present'
+  
+...

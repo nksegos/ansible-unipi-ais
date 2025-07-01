@@ -1,0 +1,11 @@
+---
+
+- name: Install postgresql-common
+  apt:
+    name: 'postgresql-common'
+    state: present
+  notify: 'run pg repo setup'
+
+- meta: flush_handlers
+
+...

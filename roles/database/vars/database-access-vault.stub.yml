@@ -1,0 +1,10 @@
+---
+# This is what your vaulted database-access-vault.yml file should look like
+#kproducer_pass_vault: 'your_very_own_password'
+#
+#ais_manager_pass_vault: 'your_very_own_password'
+#
+#kconsumer_pass_vault: 'your_very_own_password'
+#
+#kbroker_pass_vault: 'your_very_own_password'
+...

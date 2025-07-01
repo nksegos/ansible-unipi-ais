@@ -1,0 +1,74 @@
+---
+
+- name: Load DB user vars
+  include_vars:
+    dir: 'vars/'
+    extensions:
+      - 'yml'
+
+- name: Deploy DDL template to {{ inventory_hostname }}
+  template:
+    src: "templates/ddl/{{ dbname }}.sql.j2"
+    dest: "/tmp/{{ dbname }}.sql"
+    group: postgres
+    mode: 0640
+
+- name: Deploy benchmark DDL template to {{ inventory_hostname }}
+  template:
+    src: "templates/ddl/{{ dbname }}_bench.sql.j2"
+    dest: "/tmp/{{ dbname }}_bench.sql"
+    group: postgres
+    mode: 0640
+  when: ( include_benchmark_ddl | default(False) | bool ) == True
+
+- name: Create DB {{ dbname }} from DDL template
+  command:
+    cmd: "/usr/bin/psql -f /tmp/{{ dbname }}.sql"
+  become_user: 'postgres'
+
+- name: Create benchmark DB {{ dbname }}_bench from DDL template
+  command:
+    cmd: "/usr/bin/psql -f /tmp/{{ dbname }}_bench.sql"
+  become_user: 'postgres'
+  when: ( include_benchmark_ddl | default(False) | bool ) == True
+
+- name: Check if ais_codes_descriptions.csv seed file is present
+  stat:
+    path: "{{ role_path }}/files/datasets/ais_codes_descriptions.csv"
+    get_checksum: false
+    get_attributes: false
+    get_mime: false
+  delegate_to: localhost
+  become: no
+  register: seed_file
+  when: ( load_ais_code_type_seed | default(True) | bool ) == True
+
+- name: Existence evaluation
+  assert:
+    that: seed_file.stat.exists
+    success_msg: "Seed file for table {{ ais_code_table }} is present."
+    fail_msg: "Seed file for table {{ ais_code_table }} is not present."
+  when: ( load_ais_code_type_seed | default(True) | bool ) == True
+
+- name: Copy ais_codes_descriptions.csv to {{ inventory_hostname }}
+  copy:
+    src: "{{ role_path }}/files/datasets/ais_codes_descriptions.csv"
+    dest: '/tmp/ais_codes_descriptions.csv'
+    mode: 0644
+  when: ( load_ais_code_type_seed | default(True) | bool ) == True
+
+- name: Load  {{ dbname }}.{{ ais_code_table }} from seed file
+  command:
+    cmd: /usr/bin/psql -d {{ dbname }} -c "\COPY {{ ais_code_table }} FROM '/tmp/ais_codes_descriptions.csv' CSV HEADER"
+  become_user: 'postgres'
+  when: ( load_ais_code_type_seed | default(True) | bool ) == True
+
+- name: Load  {{ dbname }}_bench.{{ ais_code_table }} from seed file
+  command:
+    cmd: /usr/bin/psql -d {{ dbname }}_bench -c "\COPY {{ ais_code_table }} FROM '/tmp/ais_codes_descriptions.csv' CSV HEADER"
+  become_user: 'postgres'
+  when: 
+    - ( load_ais_code_type_seed | default(True) | bool ) == True
+    - ( include_benchmark_ddl | default(False) | bool ) == True
+
+...

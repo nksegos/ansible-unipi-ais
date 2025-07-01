@@ -1,0 +1,10 @@
+---
+
+- name: Install PG client and library deps
+  apt:
+    name:
+      - "postgresql-client-{{ pg_major_version }}"
+      - "libpq5"
+      - "libpq-dev"
+
+...

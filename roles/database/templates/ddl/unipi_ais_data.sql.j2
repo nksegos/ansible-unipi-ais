@@ -1,0 +1,86 @@
+{% for role in database_roles %}
+{% if database_roles[role].state == 'present' %}
+CREATE USER {{ database_roles[role].name }} WITH PASSWORD '{{ database_roles[role].password }}';
+{% endif %}
+{% endfor %}
+
+CREATE DATABASE {{ dbname }} OWNER {{ database_roles['owner'].name }};
+
+\c {{ dbname }}
+
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+
+{% for role in database_roles %}
+{% if database_roles[role].state == 'present' %}
+GRANT USAGE ON SCHEMA public TO {{ database_roles[role].name }};
+{% endif %}
+{% endfor %}
+
+
+
+CREATE TABLE {{ ais_static_table }} (
+    mmsi CHAR(64) PRIMARY KEY,
+    country  TEXT,
+    shiptype INT,
+    shipname TEXT
+);
+
+CREATE TABLE {{ ais_code_table }} (
+    type_code INT PRIMARY KEY,
+    description TEXT
+);
+
+CREATE TABLE {{ ais_kinematic_table }} (
+    id SERIAL PRIMARY KEY,
+    timestamp BIGINT NOT NULL,
+    mmsi CHAR(64) NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL,
+    latitude DOUBLE PRECISION NOT NULL,
+    heading DOUBLE PRECISION,
+    speed DOUBLE PRECISION,
+    course DOUBLE PRECISION
+);
+
+CREATE VIEW {{ ais_view }} AS
+SELECT DISTINCT ON (k.mmsi)
+    k.mmsi as mmsi,
+    k.timestamp AS ts,
+    k.longitude AS lon,
+    k.latitude AS lat,
+    CASE
+    	WHEN k.speed > 0 THEN 'Y'
+	ELSE 'N'
+    END AS moving,
+    k.speed,
+    k.heading,
+    s.shipname AS vessel_name,
+    s.country AS flag,
+    SPLIT_PART(c.description, ',', 1) AS vessel_type
+FROM
+    {{ ais_kinematic_table }} k
+LEFT JOIN
+    {{ ais_static_table }} s ON k.mmsi = s.mmsi
+LEFT JOIN 
+    {{ ais_code_table }} c ON s.shiptype = c.type_code
+WHERE (k.speed > 0 AND TO_TIMESTAMP(k.timestamp / 1000) > now() - interval '12 minute') OR ((k.speed = 0 OR k.speed IS NULL) AND TO_TIMESTAMP(k.timestamp / 1000) > now() - interval '30 minute')
+ORDER BY
+    k.mmsi, k.timestamp DESC;
+
+{% for role in database_roles %}
+{% if ( role != 'owner' ) and ( database_roles[role].state == 'present' ) %}
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {{ database_roles[role].name }};
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {{ database_roles[role].name }};
+{% elif role == 'owner' %}
+ALTER DEFAULT PRIVILEGES FOR ROLE {{ database_roles['owner'].name }} IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO {{ database_roles[role].name }};
+
+ALTER DEFAULT PRIVILEGES FOR ROLE {{ database_roles['owner'].name }} IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO {{ database_roles[role].name }};
+{% endif %}
+{% endfor %}
+
+
+ALTER TABLE public.{{ ais_static_table }} OWNER TO {{ database_roles['owner'].name }};
+ALTER TABLE public.{{ ais_code_table }} OWNER TO {{ database_roles['owner'].name }};
+ALTER TABLE public.{{ ais_kinematic_table }} OWNER TO {{ database_roles['owner'].name }};
+ALTER VIEW  public.{{ ais_view }} OWNER TO {{ database_roles['owner'].name }};

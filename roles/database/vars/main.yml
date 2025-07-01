@@ -1,0 +1,17 @@
+---
+
+pg_major_version: '17'
+
+dbname: 'unipi_ais_data'
+
+database_port: 5432
+
+ais_static_table: 'ais_static'
+
+ais_kinematic_table: 'ais_kinematic'
+
+ais_code_table: 'ais_codes_types'
+
+ais_view: 'ais_latest_positions'
+
+...

@@ -1,0 +1,8 @@
+---
+
+- name: "Install PostgreSQL {{ pg_major_version }}"
+  apt:
+    name: "postgresql-{{ pg_major_version }}"
+    state: present
+
+...
