@@ -7,6 +7,7 @@ vm_disk: '20G'
 vm_os: 'debian-12'
 vm_image_storage: '/PATH/TO/YOUR/IMAGE/STORAGE/DIR'
 vm_root_pass: "{{ vm_root_pass_vault }}"
+vm_network: 'default'
 
 vm_package_registry:
   - 'bc'

@@ -75,7 +75,7 @@
       --vcpu {{ vm_vcpu }} \
       --disk path={{ vm_image_storage }}/{{ vm_name_prefix }}{{ vm_id }}.qcow2 \
       --os-variant "{{ vm_os | regex_replace('-12', '11') }}" \
-      --network=network=default \
+      --network=network={{ vm_network }} \
       --noautoconsole
   become: true
   async: 1200
