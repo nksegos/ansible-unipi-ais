@@ -1,0 +1,13 @@
+---
+
+- name: Stop application services
+  systemd_service:
+    name: "{{ service }}"
+    state: stopped
+  loop:
+    - 'ais-viz'
+    - 'cache-manager'
+  loop_control:
+    loop_var: 'service'
+
+...

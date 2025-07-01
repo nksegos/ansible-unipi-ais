@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+
+import json
+import sys
+import signal
+import psycopg2
+import time
+from psycopg2 import OperationalError
+from confluent_kafka import Consumer, KafkaException, KafkaError
+from redis import Redis, ConnectionError
+
+topics = ["{{ kafka_topics | select('match', '.*static.*') | first }}", "{{ kafka_topics | select('match', '.*kinematic.*') | first }}"]
+
+redis_host = "{{ redis_host }}"
+redis_port = {{ redis_port }}
+redis_db = {{ redis_db }}
+
+db_host = "{{ database_host }}"
+db_port = {{ database_port }}
+db_user = "{{ database_roles['consumer'].name }}"
+db_password = "{{ database_roles['consumer'].password }}"
+db_name = "{{ dbname }}"
+
+kafka_broker = "{{ kafka_broker_host }}:{{ kafka_broker_port }}"
+
+ttl_moving = 12 * 60 
+ttl_stationary = 30 * 60
+
+consumer_conf = {
+    'bootstrap.servers': kafka_broker,
+    'group.id': 'ais_viz_cache',
+    'auto.offset.reset': 'latest',  
+}
+
+consumer = Consumer(consumer_conf)
+try:
+    broker_reply = consumer.list_topics(timeout=5)
+    for topic in topics:
+        if topic not in broker_reply.topics:
+            err = KafkaError(KafkaError._UNKNOWN_TOPIC_OR_PART, f"Topic not found or unavailable: {topic}")
+            raise KafkaException(err)
+except KafkaException as e:
+    print(f'Broker connection failed: {e}. Check config. Exiting...')
+    sys.exit(1)
+
+consumer.subscribe(topics)
+
+redis_client = Redis(host=redis_host, port=redis_port, db=redis_db)
+try:
+    pong = redis_client.ping()
+except ConnectionError as e:
+    print(f'Redis connection failed: {e}. Check config. Exiting...')
+    sys.exit(1)
+
+
+try:
+    conn = psycopg2.connect(host=db_host,port=db_port,dbname=db_name,user=db_user,password=db_password, connect_timeout=3)
+except OperationalError as e:
+    print(f'Database connection failed: {e}. Check config. Exiting...')
+    sys.exit(1)
+
+cur = conn.cursor()
+
+def sigterm_handler(signal, frame):
+    print('Caught SIGTERM. Shutting down...')
+    conn.close()
+    consumer.close()
+    redis_client.connection_pool.disconnect()
+    sys.exit(0)
+ 
+signal.signal(signal.SIGTERM, sigterm_handler)
+
+cur.execute("SELECT * FROM {{ ais_code_table }};")
+reply = cur.fetchall()
+for row in reply:
+    redis_client.hset('ais_code_descriptions',row[0],row[1])
+
+cur.execute("SELECT * FROM {{ ais_view }};")
+reply = cur.fetchall()
+for row in reply:
+    redis_client.hset(row[0],'timestamp', row[1])
+    redis_client.hset(row[0],'longitude', row[2])
+    redis_client.hset(row[0],'latitude', row[3])
+    redis_client.hset(row[0],'moving', row[4])
+    redis_client.hset(row[0],'speed', row[5] or "0")
+    redis_client.hset(row[0],'heading', row[6] or "0")
+    redis_client.hset(row[0],'vessel_name', row[7] or '')
+    redis_client.hset(row[0],'country', row[8] or '') 
+    redis_client.hset(row[0],'vessel_type', row[9] or '')
+    redis_ttl = ttl_moving if ( row[4] == 'Y') else ttl_stationary
+    redis_client.expire(row[0], redis_ttl)
+conn.close()
+
+try:
+    while True:
+        msg = consumer.poll(timeout=1.0)
+        if msg is None:
+            time.sleep(0.1) # Very light throttling in case the msg queue is empty
+            continue
+        elif msg.error() and msg.error().code() != KafkaError._PARTITION_EOF:
+            print(f'Kafka error: {msg.error()}')
+            time.sleep(0.1)
+            continue
+        elif msg.error():
+            time.sleep(0.1)
+            continue
+        try:
+            data = json.loads(msg.value().decode('utf-8'))['payload']
+
+            key = data['mmsi'] 
+            data.pop('mmsi')
+            if len(data) > 3:
+                data['moving'] = 'Y' if float(data['speed'] or 0) > 0 else 'N'
+            
+            redis_client.hset(key, mapping=data)
+                
+            if len(data) > 3:
+                redis_ttl = ttl_moving if ( data['moving'] == 'Y') else ttl_stationary
+                redis_client.expire(key, redis_ttl)
+
+            #print(f"Stored message {data} at Redis key '{key}' with TTL {redis_ttl}s")
+
+            consumer.commit(message=msg)
+        except Exception as e:
+            print(f"Failed to process message at offset {msg.offset()}: {e}", exc_info=True)
+except KeyboardInterrupt:
+    print("Caught SIGINT. Shutting down...")
+finally:
+    redis_client.connection_pool.disconnect()
+    consumer.close()
+    sys.exit(0)
+
+

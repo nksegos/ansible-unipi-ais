@@ -1,0 +1,25 @@
+---
+
+- name: Deploy application service templates
+  template:
+    src: "templates/services/{{ service }}.service.j2"
+    dest: "/usr/lib/systemd/system/{{ service }}.service"
+  loop:
+    - 'cache-manager'
+    - 'ais-viz'
+  loop_control:
+    loop_var: 'service'
+
+- name: Reload SystemD and enable application services
+  systemd_service:
+    name: "{{ service }}"
+    daemon_reload: true
+    enabled: true
+    state: stopped
+  loop:
+    - 'cache-manager'
+    - 'ais-viz'
+  loop_control:
+    loop_var: 'service'
+
+...

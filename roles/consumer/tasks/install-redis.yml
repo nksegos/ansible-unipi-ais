@@ -1,0 +1,39 @@
+---
+
+- name: Check if the Redis repo file exists
+  stat:
+    path: '/etc/apt/sources.list.d/redis.list'
+    get_checksum: false
+    get_attributes: false
+    get_mime: false
+  register: redis_repo_file
+
+- name: If the Redis repo file is missing, the install it
+  when: not redis_repo_file.stat.exists
+  block:
+
+    - name: Ensure dependencies are installed
+      apt:
+        name: "{{ package }}"
+        state: present
+      loop:
+        - 'lsb-release'
+        - 'curl'
+        - 'gpg'
+      loop_control:
+        loop_var: 'package'
+
+    - name: Install Redis repo file
+      shell:
+        cmd: |
+          curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+          chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/redis.list
+
+- name: Install Redis server
+  apt:
+    name: 'redis'
+    state: 'latest'
+    update_cache: true
+
+...

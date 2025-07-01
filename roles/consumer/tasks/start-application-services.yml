@@ -1,0 +1,13 @@
+---
+
+- name: Start application services
+  systemd_service:
+    name: "{{ service }}"
+    state: started
+  loop:
+    - 'cache-manager'
+    - 'ais-viz'
+  loop_control:
+    loop_var: 'service'
+
+...

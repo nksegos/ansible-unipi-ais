@@ -1,0 +1,128 @@
+---
+
+- name: Create kconsumer group
+  user:
+    name: kconsumer
+    comment: Apache Kafka Consumer Client
+    create_home: false
+    shell: /bin/false
+    state: present
+
+- name: Create  dirs
+  file:
+    path: "{{ dir }}"
+    state: directory
+    owner: 'kconsumer'
+    group: 'kconsumer'
+    mode: 0750
+  loop:
+    - "{{ consumer_base }}"
+    - "{{ consumer_base }}/bin"
+    - "{{ consumer_base }}/apps"
+  loop_control:
+    loop_var: 'dir'
+
+- name: Setup PG repo
+  include_role:
+    name: database
+    tasks_from: setup-postgres-repo.yml
+
+- name: Install PG client
+  include_role:
+    name: database
+    tasks_from: install-postgres-client.yml
+
+- name: Setup Consumer venv
+  include_role:
+    name: common
+    tasks_from: build-venv.yml
+  vars:
+    venv_command: "/usr/local/bin/python{{ app_python_version }} -m venv"
+    venv_path: "{{ consumer_base }}/venv/"
+    venv_owner: 'kconsumer'
+    venv_packages: "{{ app_python_dependencies }}"
+
+- name: Load Kafka vars
+  include_vars:
+    dir: "{{ role_path }}/../kafka/vars/"
+
+- name: Check if kafka_broker_host has been supplied and if not, try to pull one from the inventory
+  block:
+
+    - name: Evaluate contents of kafka_broker_host
+      include_role:
+        name: common
+        tasks_from: var-evaluator.yml
+      vars:
+        eval_var: 'kafka_broker_host'
+
+  rescue:
+
+    - name: Attempt to pull kafka_broker_host from the inventory
+      set_fact:
+        kafka_broker_host: "{{ groups['broker'] | default(['']) | first }}"
+
+    - name: Re-evaluate kafka_broker_host
+      include_role:
+        name: common
+        tasks_from: var-evaluator.yml
+      vars:
+        eval_var: 'kafka_broker_host'
+
+
+- name: Load database vars
+  include_vars:
+    dir: "{{ role_path }}/../database/vars/"
+
+- name: Check if database_host has been supplied and if not, try to pull one from the inventory
+  block:
+
+    - name: Evaluate contents of database_host
+      include_role:
+        name: common
+        tasks_from: var-evaluator.yml
+      vars:
+        eval_var: 'database_host'
+
+  rescue:
+
+    - name: Attempt to pull database_host from the inventory
+      set_fact:
+        database_host: "{{ groups['database'] | default(['']) | first }}"
+
+    - name: Re-evaluate database_host
+      include_role:
+        name: common
+        tasks_from: var-evaluator.yml
+      vars:
+        eval_var: 'database_host'
+
+
+- name: Deploy consumer clients
+  template:
+    src: "templates/clients/{{ script }}.j2"
+    dest: "{{ consumer_base }}/bin/{{ script }}"
+    owner: 'kconsumer'
+    group: 'kconsumer'
+    mode: 0750
+  loop:
+    - 'cache-manager.py'
+    - 'db-consumer-bench.py'
+    - 'kafka-consumer-bench.py'
+  loop_control:
+    loop_var: 'script'
+
+- name: Get application
+  git:
+    repo: "{{ app_git_url }}"
+    dest: "{{ consumer_base }}/apps/unipi-ais"
+  become_user: 'kconsumer'
+
+- name: Deploy server.ini to application tree
+  template:
+    src: 'templates/configs/server.ini.j2'
+    dest: "{{ consumer_base }}/apps/unipi-ais/server.ini"
+    owner: 'kconsumer'
+    group: 'kconsumer'
+
+...
