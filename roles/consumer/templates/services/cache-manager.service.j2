@@ -1,0 +1,18 @@
+[Unit]
+Description=Redis Cache Manager
+Requires=network.target redis-server.service
+After=network.target redis-server.service
+PartOf=redis-server.service
+BindsTo=redis-server.service
+
+[Service]
+Type=simple
+User=kconsumer
+Group=kconsumer
+
+ExecStart={{ consumer_base }}/venv/bin/python3 {{ consumer_base }}/bin/cache-manager.py
+Restart=always
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target

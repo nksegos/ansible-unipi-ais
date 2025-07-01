@@ -1,0 +1,14 @@
+[datastories.org]
+
+redis_host = {{ redis_host }}
+redis_port = {{ redis_port }}
+redis_db = {{ redis_db }}
+
+kafka_broker = {{ kafka_broker_host }}:{{ kafka_broker_port }}
+kafka_topics = {{ kafka_topics | select('match', '.*static.*') | first }},{{ kafka_topics | select('match', '.*kinematic.*') | first }}
+
+db_host = {{ database_host }}
+db_port = {{ database_port }}
+db_name = {{ dbname }}
+db_user = {{ database_roles['consumer'].name }}
+db_password = {{ database_roles['consumer'].password }}

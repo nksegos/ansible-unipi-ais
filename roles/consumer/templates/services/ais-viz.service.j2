@@ -1,0 +1,17 @@
+[Unit]
+Description=UniPi AIS Visualization Stream
+Requires=network.target 
+Wants=cache-manager.service
+After=network.target cache-manager.service
+
+[Service]
+Type=simple
+User=kconsumer
+Group=kconsumer
+WorkingDirectory={{ consumer_base }}/apps/unipi-ais
+ExecStart={{ consumer_base }}/venv/bin/python3 -m bokeh serve . --address 0.0.0.0 --port 6969 --use-xheaders --prefix /unipi-ais --allow-websocket-origin={{ inventory_hostname }}:6969 --allow-websocket-origin {{ inventory_hostname }} --log-level=debug
+Restart=always
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target
