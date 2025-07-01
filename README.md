@@ -22,7 +22,8 @@ if you don't modify the naming convention for the VMs, nothing needs changing. A
 ```bash
 # Create 4 VMs
 ansible-playbook playbooks/create-vms.yml -e vm_disk='20G' -e vm_count=4 --ask-become-pass 
-# These retrieve the Piraeus AIS Dataset and build a synthetic one by blending kinematic and static data, but take a lot of time and storage space, you can skip them as 3 sample enriched datasets are already present in the repo
+# These retrieve the Piraeus AIS Dataset and build a synthetic one by blending kinematic and static data,
+# but take a lot of time and storage space, you can skip them as 3 sample enriched datasets are already present in the repo
 ansible-playbook playbooks/retrieve-dataset.yml 
 ansible-playbook playbooks/prepare-dataset.yml
 # Create the PostgreSQL database and seed the utility table, optionally include the benchmarking schema
@@ -42,7 +43,8 @@ ansible-playbook playbooks/start-kafka-producer.yml
 
 For further control over the data flow processes, the following playbooks can be used:
 ```bash
-# When executed in this order, they will result in a complete reset of the data flow, allowing to restart data production afterwards with no conflicts. NOTE: A refresh on visualization page is necessary to re-subsribe to Kafka after the recycling of the topics
+# When executed in this order, they will result in a complete reset of the data flow, allowing to restart data production afterwards
+# with no conflicts. NOTE: A refresh on visualization page is necessary to re-subsribe to Kafka after the recycling of the topics
 ansible-playbook playbooks/stop-kafka-producer.yml 
 ansible-playbook playbooks/flush-topics.yml 
 ansible-playbook playbooks/flush-database.yml 
