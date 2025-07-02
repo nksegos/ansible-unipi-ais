@@ -45,7 +45,10 @@ try:
         static_data = static_df[static_df["vessel_id"] == vessel_id].iloc[0].tolist() 
 
         for ts in range(start_ts, end_ts, interval_msec):
-            lagged_ts = ts + 30000 
+            if ts == start_ts:
+                lagged_ts = ts + 30000 
+            else: 
+                lagged_ts = 30000
             if lagged_ts < end_ts: 
                 new_row = [lagged_ts] + static_data  
                 all_rows.append((lagged_ts , new_row))
