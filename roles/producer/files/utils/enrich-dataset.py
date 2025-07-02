@@ -48,10 +48,9 @@ try:
             if ts == start_ts:
                 lagged_ts = ts + 30000 
             else: 
-                lagged_ts = 30000
-            if lagged_ts < end_ts: 
-                new_row = [lagged_ts] + static_data  
-                all_rows.append((lagged_ts , new_row))
+                lagged_ts = ts
+            new_row = [lagged_ts] + static_data  
+            all_rows.append((lagged_ts , new_row))
 
     
     all_rows.sort(key=lambda x: x[0])
