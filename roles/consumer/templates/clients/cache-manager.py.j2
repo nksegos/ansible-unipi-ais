@@ -114,8 +114,9 @@ try:
             
             redis_client.hset(key, mapping=data)
                 
-            redis_ttl = ttl_moving if ( data.get('moving', 'N') == 'Y' ) else ttl_stationary
-            redis_client.expire(key, redis_ttl)
+            if len(data) > 3:
+                redis_ttl = ttl_moving if ( data['moving'] == 'Y') else ttl_stationary
+                redis_client.expire(key, redis_ttl)
 
             #print(f"Stored message {data} at Redis key '{key}' with TTL {redis_ttl}s")
 
