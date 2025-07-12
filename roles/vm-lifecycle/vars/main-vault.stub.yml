@@ -1,5 +1,5 @@
 ---
 #
-#vm_root_password: '<Your_Password_Here>'
+#vm_root_pass_vault: '<Your_Password_Here>'
 #
 ...
