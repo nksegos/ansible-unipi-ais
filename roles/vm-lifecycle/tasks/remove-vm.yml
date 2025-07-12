@@ -34,6 +34,7 @@
   file:
     path: "{{ vm_image_storage }}/{{ target_vm }}.qcow2"
     state: absent
+  become: true
 
 - name: Remove VM from inventory
   replace:
